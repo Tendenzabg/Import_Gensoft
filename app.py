@@ -190,19 +190,34 @@ GENDER_PREFIXES = {
 # ============================================================
 
 def load_tipo_dictionary(uploaded_file):
-    """Carica dizionario TIPO da un file Excel con foglio Traduzioni."""
+    """Carica dizionario TIPO da un file Excel con foglio Traduzioni.
+    Supporta due formati:
+    - Formato semplice: 3 colonne (Inglese, Bulgaro intermedio, Bulgaro)
+    - Formato SOFIA: 13+ colonne (ARTICOLI, ..., colonna 12 = bulgaro semplificato)
+    """
     try:
         df_trad = pd.read_excel(uploaded_file, sheet_name='Traduzioni')
-        # Colonna 0 = ARTICOLI (inglese), Colonna 12 = Unnamed:12 (bulgaro semplificato)
         mapping = {}
+        num_cols = len(df_trad.columns)
+
         for _, row in df_trad.iterrows():
-            eng = row.iloc[0]  # ARTICOLI / INGLESE
-            bg = row.iloc[12]  # Unnamed:12 / bulgaro semplificato
+            eng = row.iloc[0]  # Prima colonna = inglese
+
+            if num_cols >= 13:
+                # Formato SOFIA: usa colonna 12 (bulgaro semplificato)
+                bg = row.iloc[12]
+            elif num_cols >= 3:
+                # Formato semplice: usa ultima colonna (Bulgaro)
+                bg = row.iloc[num_cols - 1]
+            else:
+                continue
+
             if pd.notna(eng) and pd.notna(bg) and str(eng).strip() and str(bg).strip():
                 eng_str = str(eng).strip()
                 bg_str = str(bg).strip()
-                if eng_str not in ('INGLESE', 'ARTICOLI') and bg_str != '0':
+                if eng_str not in ('INGLESE', 'ARTICOLI', 'Inglese') and bg_str != '0':
                     mapping[eng_str] = bg_str
+
         return mapping if mapping else None
     except Exception:
         return None
