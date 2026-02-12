@@ -316,6 +316,13 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
         axis=1
     )
 
+    # 23: Site Description = Категория_3 + Brand + DESCRIZIONE
+    result['Site Description'] = (
+        result['Категория_3'].fillna('').astype(str) + ' ' +
+        result['BRAND'].fillna('').astype(str) + ' ' +
+        result['DESCRIZIONE'].fillna('').astype(str)
+    ).str.strip()
+
     return result
 
 
