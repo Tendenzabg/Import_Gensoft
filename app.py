@@ -491,14 +491,50 @@ if uploaded_file is not None:
 
         excel_bytes = to_excel_bytes(df_output)
 
-        st.download_button(
-            label="Scarica File Elaborato",
-            data=excel_bytes,
-            file_name=filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True,
-        )
+        col_dl1, col_dl2 = st.columns(2)
+
+        with col_dl1:
+            st.download_button(
+                label="Scarica File Elaborato",
+                data=excel_bytes,
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True,
+            )
+
+        # --- PACKING LIST ---
+        # Raggruppa per Cod+Color, somma QTA, prendi prima DESCRIZIONE e PREZZO NEGOZIO
+        df_packing = df_output.groupby('Cod+Color', sort=False).agg(
+            DESCRIZIONE=('DESCRIZIONE', 'first'),
+            QTA=('QTA', 'sum'),
+            PREZZO_NEGOZIO=('PREZZO NEGOZIO', 'first'),
+        ).reset_index()
+
+        # Rinomina colonne in bulgaro
+        df_packing = df_packing.rename(columns={
+            'Cod+Color': 'Код',
+            'DESCRIZIONE': 'Описание',
+            'QTA': 'Колич.',
+            'PREZZO_NEGOZIO': 'Цена',
+        })
+
+        packing_bytes = to_excel_bytes(df_packing)
+        packing_filename = f"Packing_List_{timestamp}.xlsx"
+
+        with col_dl2:
+            st.download_button(
+                label="Scarica Packing List",
+                data=packing_bytes,
+                file_name=packing_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="secondary",
+                use_container_width=True,
+            )
+
+        # Anteprima Packing List
+        with st.expander("Anteprima Packing List"):
+            st.dataframe(df_packing, use_container_width=True)
 
 else:
     st.info("Carica un file Excel per iniziare l'elaborazione.")
