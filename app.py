@@ -253,15 +253,7 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
     # 1-10: Colonne base
     result['Cod+Color'] = df['Art.num']
     result['Cod.Nike'] = df['Code']
-    cod_color_raw = df['Art.num'].astype(str).str.split('-', n=1).str[1]
-    # Prova a convertire in intero per rimuovere zeri iniziali (es: "010" -> "10")
-    # Se non e' numerico, mantieni la stringa originale
-    def clean_cod_color(val):
-        try:
-            return str(int(val))
-        except (ValueError, TypeError):
-            return str(val)
-    result['Cod Color'] = cod_color_raw.apply(clean_cod_color)
+    result['Cod Color'] = df['Art.num'].astype(str).str.split('-', n=1).str[1]
     result['TAGLIA'] = df['SizeConverted']
     result['SKU Completo'] = df['Art.num'].astype(str) + '-' + df['SizeConverted'].astype(str)
     result['DESCRIZIONE'] = df['Description']
