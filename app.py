@@ -292,6 +292,12 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
     # 17: CATEG.BG
     result['CATEG.BG'] = df['Division'].map(DIVISION_MAP)
 
+    # NEW: Група = BRAND + CATEG.BG (Uppercase)
+    result['Група'] = (
+        result['BRAND'].fillna('').astype(str) + ' ' +
+        result['CATEG.BG'].fillna('').astype(str)
+    ).str.upper().str.strip()
+
     # 18: GEN.BG
     result['GEN.BG'] = df['Gender'].map(GENDER_MAP)
 
@@ -364,6 +370,18 @@ with st.sidebar:
         "Марка",
         value="NIKE",
         help="Име на марката за колона BRAND"
+    )
+
+    warehouse_name = st.text_input(
+        "Склад (за Import Gensoft)",
+        value="",
+        placeholder="Въведете склад..."
+    )
+
+    supplier_name = st.text_input(
+        "Доставчик (за Import Gensoft)",
+        value="",
+        placeholder="Въведете доставчик..."
     )
 
     st.divider()
@@ -496,7 +514,8 @@ if uploaded_file is not None:
 
         excel_bytes = to_excel_bytes(df_output)
 
-        col_dl1, col_dl2, col_dl3 = st.columns(3)
+        col_dl1, col_dl2 = st.columns(2)
+        col_dl3, col_dl4 = st.columns(2)
 
         with col_dl1:
             st.download_button(
@@ -592,6 +611,44 @@ if uploaded_file is not None:
                 use_container_width=True,
             )
 
+        # --- IMPORT GENSOFT ---
+        df_gensoft = pd.DataFrame()
+        df_gensoft['Склад'] = [warehouse_name] * len(df_output)
+        df_gensoft['Главна група'] = df_output['BRAND']
+        df_gensoft['Група'] = df_output['Група']
+        df_gensoft['Стока'] = df_output['Cod.Nike']
+        df_gensoft['Сер./парт. номер'] = df_output['BARCODE']
+        df_gensoft['Код на стока'] = df_output['Site Description']
+        df_gensoft['Баркод на стока'] = ""
+        df_gensoft['Мярка'] = "бр."
+        df_gensoft['Количество'] = df_output['QTA']
+        df_gensoft['Доставна цена'] = df_output['FPC Price w/o VAT in EUR']
+        df_gensoft['Доставна валута'] = "eur"
+        df_gensoft['Цена на дребно'] = df_output['PREZZO NEGOZIO']
+        df_gensoft['Валута на дребно'] = "eur"
+        df_gensoft['Доставчик'] = [supplier_name] * len(df_output)
+        df_gensoft['К-во за поръчване'] = df_output['QTA']
+        df_gensoft['Цена'] = (df_output['FPC Price w/o VAT in EUR'] * 1.2).round(2)
+        df_gensoft['Валута'] = "eur"
+        df_gensoft['Бележка'] = df_output['Cod+Color']
+        df_gensoft['Активна'] = "Y"
+        df_gensoft['Активна за Web'] = "Y"
+        df_gensoft['Ограничения в сметки'] = "без ограничения"
+        df_gensoft['Процент ДДС'] = ""
+
+        gensoft_bytes = to_excel_bytes(df_gensoft)
+        gensoft_filename = f"Import_Gensoft_({data}).xlsx"
+
+        with col_dl4:
+            st.download_button(
+                label="Изтегли Import Gensoft",
+                data=gensoft_bytes,
+                file_name=gensoft_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="secondary",
+                use_container_width=True,
+            )
+
         # Преглед на Packing List
         with st.expander("Преглед на Packing List"):
             st.dataframe(df_packing, use_container_width=True)
@@ -600,53 +657,73 @@ if uploaded_file is not None:
         with st.expander("Преглед на Packing List Детайлен"):
             st.dataframe(df_packing_dett, use_container_width=True)
 
+        # Преглед на Import Gensoft
+        with st.expander("Преглед на Import Gensoft"):
+            st.dataframe(df_gensoft, use_container_width=True)
+
 else:
     st.info("Качете Excel файл, за да започнете обработката.")
 
-    # Показване на очакваните колони
-    with st.expander("Необходими колони в изходния файл"):
-        st.markdown("""
-        Excel файлът трябва да съдържа следните колони:
-        - **Art.num** - Код на артикул + цвят (напр.: DA1028-502)
-        - **Code** - Код Nike (напр.: DA1028)
-        - **SizeConverted** - Конвертиран размер (напр.: S, M, L, XL)
-        - **Description** - Описание на продукта
-        - **Season** - Сезон
-        - **Barcode** - Баркод
-        - **Dlv.qty** - Доставено количество
-        - **FPC Price w/o VAT in EUR** - Цена без ДДС
-        - **Division** - Раздел (APP, FTW, EQU)
-        - **Gender** - Пол
-        - **Silhouette** - Тип продукт
-        """)
+    # ============================================================
+    # ДОКУМЕНТАЦИЯ / ПОМОЩ
+    # ============================================================
+    st.divider()
+    col_help1, col_help2 = st.columns(2)
 
-    with st.expander("Генерирани колони"):
-        st.markdown("""
-        Обработката генерира **23 колони**:
+    with col_help1:
+        with st.expander("Необходими колони в оригиналния файл"):
+            st.markdown("""
+            Файлът трябва да съдържа следните колони (имена от оригиналния Ballistic файл):
+            - `Art.num`
+            - `Code`
+            - `SizeConverted`
+            - `Description`
+            - `Season`
+            - `Barcode`
+            - `Dlv.qty`
+            - `FPC Price w/o VAT in EUR`
+            - `Division`
+            - `Gender`
+            - `Silhouette`
+            """)
 
-        | # | Колона | Източник |
-        |---|--------|----------|
-        | 1 | Cod+Color | Art.num |
-        | 2 | Cod.Nike | Code |
-        | 3 | Cod Color | частта след "-" от Art.num |
-        | 4 | TAGLIA | SizeConverted |
-        | 5 | SKU Completo | Art.num + "-" + SizeConverted |
-        | 6 | DESCRIZIONE | Description |
-        | 7 | STAG. | Season |
-        | 8 | BARCODE | Barcode |
-        | 9 | QTA | Dlv.qty |
-        | 10 | FPC Price w/o VAT in EUR | същата |
-        | 11 | PRZ DETT | FPC Price x множител |
-        | 12 | PREZZO NEGOZIO | търговско закръгляне |
-        | 13 | BRAND | Nike |
-        | 14 | CATEGORIA | Division |
-        | 15 | GENERE | Gender |
-        | 16 | TIPO | Silhouette |
-        | 17 | CATEG.BG | Division преведено на БГ |
-        | 18 | GEN.BG | Gender преведено на БГ |
-        | 19 | TIPO.BG | Silhouette преведено на БГ |
-        | 20 | Категория_1 | Групиране по пол |
-        | 21 | Категория_2 | Префикс пол + Категория |
-        | 22 | Категория_3 | Граматически префикс + Тип |
-        | 23 | Site Description | Категория_3 + Brand + Описание |
+    with col_help2:
+        with st.expander("Генерирани колони (Elaborato)"):
+            st.markdown("""
+            Обработката генерира **24 колони**:
+
+            | # | Колона | Източник |
+            |---|--------|----------|
+            | 1 | Cod+Color | Art.num |
+            | 2 | Cod.Nike | Code |
+            | 3 | Cod Color | частта след "-" от Art.num |
+            | 4 | TAGLIA | SizeConverted |
+            | 5 | SKU Completo | Art.num + "-" + SizeConverted |
+            | 6 | DESCRIZIONE | Description |
+            | 7 | STAG. | Season |
+            | 8 | BARCODE | Barcode |
+            | 9 | QTA | Dlv.qty |
+            | 10 | FPC Price w/o VAT in EUR | същата |
+            | 11 | PRZ DETT | FPC Price x множител |
+            | 12 | PREZZO NEGOZIO | търговско закръгляне |
+            | 13 | BRAND | Nike |
+            | 14 | CATEGORIA | Division |
+            | 15 | GENERE | Gender |
+            | 16 | TIPO | Silhouette |
+            | 17 | CATEG.BG | Division преведено на БГ |
+            | 18 | Група | Brand + CATEG.BG (главни букви) |
+            | 19 | GEN.BG | Gender преведено на БГ |
+            | 20 | TIPO.BG | Silhouette преведено на БГ |
+            | 21 | Категория_1 | Групиране по пол |
+            | 22 | Категория_2 | Префикс пол + Категория |
+            | 23 | Категория_3 | Граматически префикс + Тип |
+            | 24 | Site Description | Категория_3 + Brand + Описание |
+            """)
+
+    with st.expander("Описание на файловете за изтегляне"):
+        st.markdown("""
+        1. **Обработен файл (Elaborato)**: Пълният списък с всички 24 трансформации.
+        2. **Packing List**: Обобщен по артикул и цвят.
+        3. **Packing List Детайлен**: Обобщен по артикул, цвят и размер, с преведени колони.
+        4. **Import Gensoft**: Специален формат за директен импорт в Gensoft, използващ мануалните полета от настройките.
         """)
