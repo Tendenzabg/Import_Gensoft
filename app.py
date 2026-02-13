@@ -4,19 +4,19 @@ import io
 from datetime import datetime
 
 # ============================================================
-# CONFIGURAZIONE PAGINA
+# НАСТРОЙКИ НА СТРАНИЦАТА
 # ============================================================
 st.set_page_config(
-    page_title="Elaborazione File Nike",
+    page_title="Обработка на файлове Nike",
     page_icon="👟",
     layout="wide",
 )
 
 # ============================================================
-# DIZIONARI
+# РЕЧНИЦИ
 # ============================================================
 
-# Division -> Categoria BG
+# Division -> Категория BG
 DIVISION_MAP = {
     'APP': 'Дрехи',
     'FTW': 'Обувки',
@@ -67,7 +67,7 @@ SESSO_MAP = {
     'Младежи': 'Деца',
 }
 
-# Категория_1 -> prefisso per Категория_2
+# Категория_1 -> префикс за Категория_2
 CATEGORY2_PREFIX = {
     'Мъже': 'Мъжки',
     'Жени': 'Дамски',
@@ -77,7 +77,7 @@ CATEGORY2_PREFIX = {
     'Момичета': 'Детски',
 }
 
-# TIPO (Silhouette EN) -> TIPO.BG  (dizionario integrato da SOFIA Traduzioni)
+# TIPO (Silhouette EN) -> TIPO.BG (вграден речник от SOFIA Traduzioni)
 TIPO_MAP = {
     'Sneakers': 'Маратонки',
     'T-shirt': 'Тениска',
@@ -154,7 +154,7 @@ TIPO_MAP = {
     'G NP DF TANK': 'Потник',
 }
 
-# Price points commerciali
+# Търговски ценови точки
 PRICE_POINTS = [
     5, 9, 15, 19, 25, 29, 35, 39, 45, 49,
     55, 59, 65, 69, 75, 79, 85, 89, 95, 99,
@@ -163,13 +163,11 @@ PRICE_POINTS = [
     209, 219, 229, 239, 249, 259, 269, 279, 289, 299,
 ]
 
-# Regole grammaticali bulgare per Категория_3
-# (Категория_1, TIPO.BG) -> forma corretta
-# Le regole dipendono dal genere grammaticale della parola bulgara:
-#   - Maschile (м.р.): Мъжки/Дамски/Детски (суитшърт, панталон, клин, екип, елек, потник)
-#   - Femminile (ж.р.): Мъжка/Дамска/Детска (тениска, риза, чанта, раница, жилетка, шапка)
-#   - Neutro (ср.р.): Мъжко/Дамско/Детско (яке, бюстие, боди)
-#   - Plurale (мн.ч.): Мъжки/Дамски/Детски (маратонки, кецове, чорапи, боксерки, сандали)
+# Граматически правила за български за Категория_3
+#   - Мъжки род (м.р.): Мъжки/Дамски/Детски (суитшърт, панталон, клин, екип, елек, потник)
+#   - Женски род (ж.р.): Мъжка/Дамска/Детска (тениска, риза, чанта, раница, жилетка, шапка)
+#   - Среден род (ср.р.): Мъжко/Дамско/Детско (яке, бюстие, боди)
+#   - Множествено число (мн.ч.): Мъжки/Дамски/Детски (маратонки, кецове, чорапи, боксерки, сандали)
 
 FEMININE_WORDS = {'тениска', 'риза', 'чанта', 'раница', 'жилетка', 'шапка'}
 NEUTER_WORDS = {'яке', 'бюстие', 'боди'}
@@ -186,14 +184,14 @@ GENDER_PREFIXES = {
 
 
 # ============================================================
-# FUNZIONI
+# ФУНКЦИИ
 # ============================================================
 
 def load_tipo_dictionary(uploaded_file):
-    """Carica dizionario TIPO da un file Excel con foglio Traduzioni.
-    Supporta due formati:
-    - Formato semplice: 3 colonne (Inglese, Bulgaro intermedio, Bulgaro)
-    - Formato SOFIA: 13+ colonne (ARTICOLI, ..., colonna 12 = bulgaro semplificato)
+    """Зарежда речник TIPO от Excel файл с лист Traduzioni.
+    Поддържа два формата:
+    - Опростен формат: 3 колони (Inglese, Bulgaro intermedio, Bulgaro)
+    - SOFIA формат: 13+ колони (ARTICOLI, ..., колона 12 = опростен български)
     """
     try:
         df_trad = pd.read_excel(uploaded_file, sheet_name='Traduzioni')
@@ -201,13 +199,13 @@ def load_tipo_dictionary(uploaded_file):
         num_cols = len(df_trad.columns)
 
         for _, row in df_trad.iterrows():
-            eng = row.iloc[0]  # Prima colonna = inglese
+            eng = row.iloc[0]  # Първа колона = английски
 
             if num_cols >= 13:
-                # Formato SOFIA: usa colonna 12 (bulgaro semplificato)
+                # SOFIA формат: използва колона 12 (опростен български)
                 bg = row.iloc[12]
             elif num_cols >= 3:
-                # Formato semplice: usa ultima colonna (Bulgaro)
+                # Опростен формат: използва последната колона (Bulgaro)
                 bg = row.iloc[num_cols - 1]
             else:
                 continue
@@ -224,7 +222,7 @@ def load_tipo_dictionary(uploaded_file):
 
 
 def round_to_price_point(value):
-    """Arrotonda al price point commerciale piu vicino. Parita -> eccesso."""
+    """Закръгля до най-близката търговска ценова точка. При равенство -> нагоре."""
     best = None
     best_diff = float('inf')
     for pp in PRICE_POINTS:
@@ -236,7 +234,7 @@ def round_to_price_point(value):
 
 
 def get_cat3_value(cat1, tipo_bg):
-    """Genera Категория_3 con forma grammaticale corretta."""
+    """Генерира Категория_3 с правилна граматическа форма."""
     if pd.isna(cat1) or pd.isna(tipo_bg):
         return ''
 
@@ -252,20 +250,20 @@ def get_cat3_value(cat1, tipo_bg):
     elif tipo_lower in PLURAL_WORDS:
         prefix = prefixes['pl']
     else:
-        prefix = prefixes['m']  # default maschile
+        prefix = prefixes['m']  # по подразбиране мъжки род
 
     return f'{prefix} {tipo_bg.lower()}'
 
 
 def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
-    """Elabora il DataFrame con tutte le 22 trasformazioni."""
+    """Обработва DataFrame с всички 23 трансформации."""
 
     if tipo_map is None:
         tipo_map = TIPO_MAP
 
     result = pd.DataFrame()
 
-    # 1-10: Colonne base
+    # 1-10: Основни колони
     result['Cod+Color'] = df['Art.num']
     result['Cod.Nike'] = df['Code']
     result['Cod Color'] = df['Art.num'].astype(str).str.split('-', n=1).str[1]
@@ -286,7 +284,7 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
     # 13: BRAND
     result['BRAND'] = brand
 
-    # 14-16: Colonne originali rinominate
+    # 14-16: Оригинални колони преименувани
     result['CATEGORIA'] = df['Division']
     result['GENERE'] = df['Gender']
     result['TIPO'] = df['Silhouette']
@@ -327,7 +325,7 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
 
 
 def to_excel_bytes(df):
-    """Converte DataFrame in bytes per il download."""
+    """Конвертира DataFrame в bytes за изтегляне."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Elaborato')
@@ -335,101 +333,101 @@ def to_excel_bytes(df):
 
 
 # ============================================================
-# INTERFACCIA STREAMLIT
+# ИНТЕРФЕЙС STREAMLIT
 # ============================================================
 
-st.title("Elaborazione File Nike")
-st.markdown("Carica un file Excel di consegna, elaboralo e scarica il risultato.")
+st.title("Обработка на файлове Nike")
+st.markdown("Качете Excel файл за доставка, обработете го и изтеглете резултата.")
 
-# --- SIDEBAR ---
+# --- СТРАНИЧНА ЛЕНТА ---
 with st.sidebar:
-    st.header("Configurazione")
+    st.header("Настройки")
 
     profile = st.selectbox(
-        "Profilo elaborazione",
+        "Профил на обработка",
         ["Nike Ballistic"],
-        help="Seleziona il profilo di trasformazione dati"
+        help="Изберете профил за трансформация на данни"
     )
 
     st.divider()
 
     price_multiplier = st.number_input(
-        "Moltiplicatore prezzo (PRZ DETT)",
+        "Множител на цена (PRZ DETT)",
         min_value=1.0,
         max_value=5.0,
         value=1.8,
         step=0.1,
-        help="Il prezzo FPC viene moltiplicato per questo valore"
+        help="Цената FPC се умножава по тази стойност"
     )
 
     brand_name = st.text_input(
-        "Brand",
+        "Марка",
         value="NIKE",
-        help="Nome del brand da inserire nella colonna BRAND"
+        help="Име на марката за колона BRAND"
     )
 
     st.divider()
 
-    st.subheader("Dizionario traduzioni")
+    st.subheader("Речник за преводи")
     dict_file = st.file_uploader(
-        "Carica dizionario (opzionale)",
+        "Качете речник (по избор)",
         type=['xlsx'],
-        help="File Excel con foglio 'Traduzioni' per mappatura TIPO. Se non caricato, usa il dizionario integrato."
+        help="Excel файл с лист 'Traduzioni' за съпоставяне на TIPO. Ако не е качен, се използва вграденият речник."
     )
 
     custom_tipo_map = None
     if dict_file is not None:
         custom_tipo_map = load_tipo_dictionary(dict_file)
         if custom_tipo_map:
-            st.success(f"Dizionario caricato: {len(custom_tipo_map)} voci")
+            st.success(f"Речникът е зареден: {len(custom_tipo_map)} записа")
         else:
-            st.warning("Impossibile leggere il dizionario. Uso dizionario integrato.")
+            st.warning("Не може да се прочете речникът. Използва се вграденият речник.")
 
     st.divider()
-    st.caption("v1.0 - Elaborazione File Gensoft")
+    st.caption("v1.0 - Обработка на файлове Gensoft")
 
-# --- AREA PRINCIPALE ---
+# --- ОСНОВНА ОБЛАСТ ---
 
 uploaded_file = st.file_uploader(
-    "Carica il file Excel da elaborare",
+    "Качете Excel файл за обработка",
     type=['xlsx', 'xls'],
-    help="File di consegna Nike/Ballistic con colonne: Art.num, Code, SizeConverted, ecc."
+    help="Файл за доставка Nike/Ballistic с колони: Art.num, Code, SizeConverted и др."
 )
 
 if uploaded_file is not None:
-    # Leggi il file
+    # Четене на файла
     try:
         df_input = pd.read_excel(uploaded_file)
     except Exception as e:
-        st.error(f"Errore nella lettura del file: {e}")
+        st.error(f"Грешка при четене на файла: {e}")
         st.stop()
 
-    st.subheader("Anteprima file originale")
+    st.subheader("Преглед на оригиналния файл")
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Righe", len(df_input))
+        st.metric("Редове", len(df_input))
     with col2:
-        st.metric("Colonne", len(df_input.columns))
+        st.metric("Колони", len(df_input.columns))
 
-    with st.expander("Mostra anteprima dati originali", expanded=False):
+    with st.expander("Покажи преглед на оригиналните данни", expanded=False):
         st.dataframe(df_input.head(10), use_container_width=True)
 
-    # Verifica colonne necessarie
+    # Проверка на необходимите колони
     required_cols = ['Art.num', 'Code', 'SizeConverted', 'Description', 'Season',
                      'Barcode', 'Dlv.qty', 'FPC Price w/o VAT in EUR',
                      'Division', 'Gender', 'Silhouette']
     missing_cols = [c for c in required_cols if c not in df_input.columns]
 
     if missing_cols:
-        st.error(f"Colonne mancanti nel file: **{', '.join(missing_cols)}**")
-        st.info(f"Colonne trovate: {', '.join(df_input.columns.tolist())}")
+        st.error(f"Липсващи колони във файла: **{', '.join(missing_cols)}**")
+        st.info(f"Намерени колони: {', '.join(df_input.columns.tolist())}")
         st.stop()
 
     st.divider()
 
-    # Pulsante elabora
-    if st.button("Elabora File", type="primary", use_container_width=True):
-        with st.spinner("Elaborazione in corso..."):
+    # Бутон за обработка
+    if st.button("Обработи файла", type="primary", use_container_width=True):
+        with st.spinner("Обработка в ход..."):
             tipo_map_to_use = custom_tipo_map if custom_tipo_map else TIPO_MAP
 
             df_output = process_file(
@@ -442,49 +440,49 @@ if uploaded_file is not None:
             st.session_state['df_output'] = df_output
             st.session_state['elaborated'] = True
 
-    # Mostra risultato
+    # Показване на резултата
     if st.session_state.get('elaborated', False):
         df_output = st.session_state['df_output']
 
-        st.subheader("Risultato elaborazione")
+        st.subheader("Резултат от обработката")
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Righe", len(df_output))
+            st.metric("Редове", len(df_output))
         with col2:
-            st.metric("Colonne", len(df_output.columns))
+            st.metric("Колони", len(df_output.columns))
         with col3:
-            # Conta valori mancanti
+            # Брой липсващи стойности
             missing_count = df_output.isna().sum().sum()
             unmapped_tipo = df_output['TIPO.BG'].isna().sum()
             unmapped_gen = df_output['GEN.BG'].isna().sum()
             if unmapped_tipo > 0 or unmapped_gen > 0:
-                st.metric("Valori non mappati", f"TIPO: {unmapped_tipo}, GEN: {unmapped_gen}")
+                st.metric("Несъпоставени стойности", f"TIPO: {unmapped_tipo}, GEN: {unmapped_gen}")
             else:
-                st.metric("Stato", "Tutto mappato!")
+                st.metric("Статус", "Всичко е съпоставено!")
 
-        # Mostra valori non mappati se presenti
+        # Показване на несъпоставени стойности
         if df_output['TIPO.BG'].isna().any():
             unmapped = df_output[df_output['TIPO.BG'].isna()]['TIPO'].unique()
-            st.warning(f"TIPO non tradotti: **{', '.join(str(x) for x in unmapped)}**")
+            st.warning(f"Непреведени TIPO: **{', '.join(str(x) for x in unmapped)}**")
 
         if df_output['GEN.BG'].isna().any():
             unmapped = df_output[df_output['GEN.BG'].isna()]['GENERE'].unique()
-            st.warning(f"GENERE non tradotti: **{', '.join(str(x) for x in unmapped)}**")
+            st.warning(f"Непреведени GENERE: **{', '.join(str(x) for x in unmapped)}**")
 
-        with st.expander("Mostra anteprima risultato", expanded=True):
+        with st.expander("Покажи преглед на резултата", expanded=True):
             st.dataframe(df_output.head(20), use_container_width=True)
 
-        # Statistiche
-        with st.expander("Statistiche"):
-            tab1, tab2, tab3 = st.tabs(["Categorie", "Prezzi", "Genere"])
+        # Статистики
+        with st.expander("Статистики"):
+            tab1, tab2, tab3 = st.tabs(["Категории", "Цени", "Пол"])
             with tab1:
                 st.write("**CATEG.BG**")
                 st.dataframe(df_output['CATEG.BG'].value_counts().reset_index())
                 st.write("**Категория_1**")
                 st.dataframe(df_output['Категория_1'].value_counts().reset_index())
             with tab2:
-                st.write("**PREZZO NEGOZIO - distribuzione**")
+                st.write("**PREZZO NEGOZIO - разпределение**")
                 st.dataframe(df_output['PREZZO NEGOZIO'].value_counts().sort_index().reset_index())
             with tab3:
                 st.write("**GEN.BG**")
@@ -492,17 +490,17 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # Download
-        timestamp = datetime.now().strftime("%d%m%Y_%H%M")
-        filename = f"ELABORATO_{timestamp}.xlsx"
+        # Изтегляне
+        data = datetime.now().strftime("%d%m%Y")
+        filename = f"Elaborato_({data}).xlsx"
 
         excel_bytes = to_excel_bytes(df_output)
 
-        col_dl1, col_dl2 = st.columns(2)
+        col_dl1, col_dl2, col_dl3 = st.columns(3)
 
         with col_dl1:
             st.download_button(
-                label="Scarica File Elaborato",
+                label="Изтегли обработен файл",
                 data=excel_bytes,
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -510,28 +508,39 @@ if uploaded_file is not None:
                 use_container_width=True,
             )
 
-        # --- PACKING LIST ---
-        # Raggruppa per Cod+Color, somma QTA, prendi prima DESCRIZIONE e PREZZO NEGOZIO
+        # --- ОПАКОВЪЧЕН ЛИСТ ---
         df_packing = df_output.groupby('Cod+Color', sort=False).agg(
             DESCRIZIONE=('DESCRIZIONE', 'first'),
+            CATEG_BG=('CATEG.BG', 'first'),
             QTA=('QTA', 'sum'),
             PREZZO_NEGOZIO=('PREZZO NEGOZIO', 'first'),
         ).reset_index()
 
-        # Rinomina colonne in bulgaro
+        # Добави ред с тотал в края
+        packing_total_row = pd.DataFrame({
+            'Cod+Color': ['TOTALE'],
+            'DESCRIZIONE': [''],
+            'CATEG_BG': [''],
+            'QTA': [df_packing['QTA'].sum()],
+            'PREZZO_NEGOZIO': ['']
+        })
+        df_packing = pd.concat([df_packing, packing_total_row], ignore_index=True)
+
+        # Преименуване на колони на български
         df_packing = df_packing.rename(columns={
             'Cod+Color': 'Код',
             'DESCRIZIONE': 'Описание',
+            'CATEG_BG': 'Категория',
             'QTA': 'Колич.',
             'PREZZO_NEGOZIO': 'Цена',
         })
 
         packing_bytes = to_excel_bytes(df_packing)
-        packing_filename = f"Packing_List_{timestamp}.xlsx"
+        packing_filename = f"Packing_list_({data}).xlsx"
 
         with col_dl2:
             st.download_button(
-                label="Scarica Packing List",
+                label="Изтегли Packing List",
                 data=packing_bytes,
                 file_name=packing_filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -539,56 +548,105 @@ if uploaded_file is not None:
                 use_container_width=True,
             )
 
-        # Anteprima Packing List
-        with st.expander("Anteprima Packing List"):
+        # --- ОПАКОВЪЧЕН ЛИСТ ДЕТАЙЛЕН ---
+        df_packing_dett = df_output.groupby(['Cod.Nike', 'Cod Color', 'TAGLIA'], sort=False).agg(
+            DESCRIZIONE=('DESCRIZIONE', 'first'),
+            CATEG_BG=('CATEG.BG', 'first'),
+            QTA=('QTA', 'sum'),
+            PREZZO_NEGOZIO=('PREZZO NEGOZIO', 'first'),
+        ).reset_index()
+
+        # Добави ред с тотал в края
+        total_row = pd.DataFrame({
+            'Cod.Nike': ['TOTALE'],
+            'Cod Color': [''],
+            'TAGLIA': [''],
+            'DESCRIZIONE': [''],
+            'CATEG_BG': [''],
+            'QTA': [df_packing_dett['QTA'].sum()],
+            'PREZZO_NEGOZIO': ['']
+        })
+        df_packing_dett = pd.concat([df_packing_dett, total_row], ignore_index=True)
+
+        # Преименуване на колони на български за детайлния списък
+        df_packing_dett = df_packing_dett.rename(columns={
+            'Cod.Nike': 'КОД',
+            'Cod Color': 'Цвят',
+            'TAGLIA': 'Размер',
+            'DESCRIZIONE': 'Описание',
+            'CATEG_BG': 'Категория',
+            'QTA': 'Колич.',
+            'PREZZO_NEGOZIO': 'Цена'
+        })
+
+        packing_dett_bytes = to_excel_bytes(df_packing_dett)
+        packing_dett_filename = f"Packing_list_dett_({data}).xlsx"
+
+        with col_dl3:
+            st.download_button(
+                label="Изтегли Packing List Детайлен",
+                data=packing_dett_bytes,
+                file_name=packing_dett_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="secondary",
+                use_container_width=True,
+            )
+
+        # Преглед на Packing List
+        with st.expander("Преглед на Packing List"):
             st.dataframe(df_packing, use_container_width=True)
 
-else:
-    st.info("Carica un file Excel per iniziare l'elaborazione.")
+        # Преглед на Packing List Детайлен
+        with st.expander("Преглед на Packing List Детайлен"):
+            st.dataframe(df_packing_dett, use_container_width=True)
 
-    # Mostra le colonne attese
-    with st.expander("Colonne richieste nel file sorgente"):
+else:
+    st.info("Качете Excel файл, за да започнете обработката.")
+
+    # Показване на очакваните колони
+    with st.expander("Необходими колони в изходния файл"):
         st.markdown("""
-        Il file Excel deve contenere queste colonne:
-        - **Art.num** - Codice articolo + colore (es: DA1028-502)
-        - **Code** - Codice Nike (es: DA1028)
-        - **SizeConverted** - Taglia convertita (es: S, M, L, XL)
-        - **Description** - Descrizione prodotto
-        - **Season** - Stagione
-        - **Barcode** - Codice a barre
-        - **Dlv.qty** - Quantita consegnata
-        - **FPC Price w/o VAT in EUR** - Prezzo senza IVA
-        - **Division** - Divisione (APP, FTW, EQU)
-        - **Gender** - Genere
-        - **Silhouette** - Tipo prodotto
+        Excel файлът трябва да съдържа следните колони:
+        - **Art.num** - Код на артикул + цвят (напр.: DA1028-502)
+        - **Code** - Код Nike (напр.: DA1028)
+        - **SizeConverted** - Конвертиран размер (напр.: S, M, L, XL)
+        - **Description** - Описание на продукта
+        - **Season** - Сезон
+        - **Barcode** - Баркод
+        - **Dlv.qty** - Доставено количество
+        - **FPC Price w/o VAT in EUR** - Цена без ДДС
+        - **Division** - Раздел (APP, FTW, EQU)
+        - **Gender** - Пол
+        - **Silhouette** - Тип продукт
         """)
 
-    with st.expander("Colonne generate"):
+    with st.expander("Генерирани колони"):
         st.markdown("""
-        L'elaborazione genera **22 colonne**:
+        Обработката генерира **23 колони**:
 
-        | # | Colonna | Origine |
-        |---|---------|---------|
+        | # | Колона | Източник |
+        |---|--------|----------|
         | 1 | Cod+Color | Art.num |
         | 2 | Cod.Nike | Code |
-        | 3 | Cod Color | parte dopo "-" di Art.num |
+        | 3 | Cod Color | частта след "-" от Art.num |
         | 4 | TAGLIA | SizeConverted |
         | 5 | SKU Completo | Art.num + "-" + SizeConverted |
         | 6 | DESCRIZIONE | Description |
         | 7 | STAG. | Season |
         | 8 | BARCODE | Barcode |
         | 9 | QTA | Dlv.qty |
-        | 10 | FPC Price w/o VAT in EUR | stessa |
-        | 11 | PRZ DETT | FPC Price x moltiplicatore |
-        | 12 | PREZZO NEGOZIO | arrotondamento commerciale |
+        | 10 | FPC Price w/o VAT in EUR | същата |
+        | 11 | PRZ DETT | FPC Price x множител |
+        | 12 | PREZZO NEGOZIO | търговско закръгляне |
         | 13 | BRAND | Nike |
         | 14 | CATEGORIA | Division |
         | 15 | GENERE | Gender |
         | 16 | TIPO | Silhouette |
-        | 17 | CATEG.BG | Division tradotto BG |
-        | 18 | GEN.BG | Gender tradotto BG |
-        | 19 | TIPO.BG | Silhouette tradotto BG |
-        | 20 | Категория_1 | Raggruppamento genere |
-        | 21 | Категория_2 | Prefisso genere + Categoria |
-        | 22 | Категория_3 | Prefisso grammaticale + Tipo |
+        | 17 | CATEG.BG | Division преведено на БГ |
+        | 18 | GEN.BG | Gender преведено на БГ |
+        | 19 | TIPO.BG | Silhouette преведено на БГ |
+        | 20 | Категория_1 | Групиране по пол |
+        | 21 | Категория_2 | Префикс пол + Категория |
+        | 22 | Категория_3 | Граматически префикс + Тип |
+        | 23 | Site Description | Категория_3 + Brand + Описание |
         """)
