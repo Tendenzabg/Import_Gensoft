@@ -337,17 +337,18 @@ def to_excel_bytes(df, sheet_name='Sheet1'):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if isinstance(df.columns, pd.MultiIndex):
-            # Запис на MultiIndex хедърите ръчно от РЕД 2 (index 1)
-            # Ред 1: Празен
-            # Ред 2: Titles (numeric IDs)
-            # Ред 3: Subtitles (Bulgarian names)
+            # Запис на MultiIndex хедърите ръчно
+            # Ред 1: Subtitles (Bulgarian names) - level 1
+            # Ред 2: Titles (numeric IDs) - level 0
             header_df = pd.DataFrame(df.columns.tolist()).T
-            header_df.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=1)
-            # Запис на данните от РЕД 5 (индекс 4), ред 4 остава празен
+            header_df = header_df.reindex([1, 0])  # Разменяме редовете (Level 1 отгоре, Level 0 отдолу)
+            header_df.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=0)
+            
+            # Запис на данните от РЕД 3 (индекс 2)
             # Премахваме MultiIndex преди запис на данните, за да избегнем NotImplementedError
             df_temp = df.copy()
             df_temp.columns = range(len(df.columns))
-            df_temp.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=4)
+            df_temp.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=2)
         else:
             df.to_excel(writer, index=False, sheet_name=sheet_name)
     return output.getvalue()
