@@ -337,13 +337,17 @@ def to_excel_bytes(df, sheet_name='Sheet1'):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if isinstance(df.columns, pd.MultiIndex):
-            # Запис на MultiIndex хедърите ръчно, тъй като pandas има бъг с index=False
-            # Ред 1: Titles (numeric IDs)
-            # Ред 2: Subtitles (Bulgarian names)
+            # Запис на MultiIndex хедърите ръчно от РЕД 2 (index 1)
+            # Ред 1: Празен
+            # Ред 2: Titles (numeric IDs)
+            # Ред 3: Subtitles (Bulgarian names)
             header_df = pd.DataFrame(df.columns.tolist()).T
-            header_df.to_excel(writer, index=False, header=False, sheet_name=sheet_name)
-            # Запис на данните от ред 3
-            df.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=2)
+            header_df.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=1)
+            # Запис на данните от РЕД 5 (индекс 4), ред 4 остава празен
+            # Премахваме MultiIndex преди запис на данните, за да избегнем NotImplementedError
+            df_temp = df.copy()
+            df_temp.columns = range(len(df.columns))
+            df_temp.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=4)
         else:
             df.to_excel(writer, index=False, sheet_name=sheet_name)
     return output.getvalue()
@@ -667,7 +671,7 @@ if uploaded_file is not None:
         # Настройка на MultiIndex колони
         df_gensoft.columns = pd.MultiIndex.from_tuples(df_gensoft.columns)
 
-        gensoft_bytes = to_excel_bytes(df_gensoft)
+        gensoft_bytes = to_excel_bytes(df_gensoft, sheet_name='Import_Gensoft')
         gensoft_filename = f"Import_Gensoft_({data}).xlsx"
 
         with col_dl4:
