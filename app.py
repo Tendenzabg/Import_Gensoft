@@ -330,11 +330,22 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
     return result
 
 
-def to_excel_bytes(df):
-    """Конвертира DataFrame в bytes за изтегляне."""
+def to_excel_bytes(df, sheet_name='Sheet1'):
+    """Конвертира DataFrame в bytes за изтегляне.
+    Специална обработка за MultiIndex хедъри при index=False.
+    """
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Elaborato')
+        if isinstance(df.columns, pd.MultiIndex):
+            # Запис на MultiIndex хедърите ръчно, тъй като pandas има бъг с index=False
+            # Ред 1: Titles (numeric IDs)
+            # Ред 2: Subtitles (Bulgarian names)
+            header_df = pd.DataFrame(df.columns.tolist()).T
+            header_df.to_excel(writer, index=False, header=False, sheet_name=sheet_name)
+            # Запис на данните от ред 3
+            df.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=2)
+        else:
+            df.to_excel(writer, index=False, sheet_name=sheet_name)
     return output.getvalue()
 
 
@@ -612,29 +623,49 @@ if uploaded_file is not None:
             )
 
         # --- IMPORT GENSOFT ---
-        df_gensoft = pd.DataFrame()
-        df_gensoft['Склад'] = [warehouse_name] * len(df_output)
-        df_gensoft['Главна група'] = df_output['BRAND']
-        df_gensoft['Група'] = df_output['Група']
-        df_gensoft['Стока'] = df_output['Cod.Nike']
-        df_gensoft['Сер./парт. номер'] = df_output['BARCODE']
-        df_gensoft['Код на стока'] = df_output['Site Description']
-        df_gensoft['Баркод на стока'] = ""
-        df_gensoft['Мярка'] = "бр."
-        df_gensoft['Количество'] = df_output['QTA']
-        df_gensoft['Доставна цена'] = df_output['FPC Price w/o VAT in EUR']
-        df_gensoft['Доставна валута'] = "eur"
-        df_gensoft['Цена на дребно'] = df_output['PREZZO NEGOZIO']
-        df_gensoft['Валута на дребно'] = "eur"
-        df_gensoft['Доставчик'] = [supplier_name] * len(df_output)
-        df_gensoft['К-во за поръчване'] = df_output['QTA']
-        df_gensoft['Цена'] = df_output['FPC Price w/o VAT in EUR']
-        df_gensoft['Валута'] = "eur"
-        df_gensoft['Бележка'] = df_output['Cod+Color']
-        df_gensoft['Активна'] = "Y"
-        df_gensoft['Активна за Web'] = "Y"
-        df_gensoft['Ограничения в сметки'] = "без ограничения"
-        df_gensoft['Процент ДДС'] = ""
+        # Дефиниране на данни за новата структура с два реда хедър (ID и Име)
+        gensoft_data = {
+            ("", "Склад"): [warehouse_name] * len(df_output),
+            ("", "Главна група"): df_output['BRAND'],
+            ("", "Група"): df_output['Група'],
+            ("", "Стока"): df_output['Cod.Nike'],
+            ("", "Сер./парт. номер"): df_output['BARCODE'],
+            ("", "Код на стока"): df_output['Site Description'],
+            ("", "Баркод на стока"): "",
+            ("", "Мярка"): "бр.",
+            ("", "Количество"): df_output['QTA'],
+            ("", "Доставна цена"): df_output['FPC Price w/o VAT in EUR'],
+            ("", "Доставна валута"): "eur",
+            ("", "Цена на дребно"): df_output['PREZZO NEGOZIO'],
+            ("", "Валута на дребно"): "eur",
+            ("", "Доставчик"): [supplier_name] * len(df_output),
+            ("", "К-во за поръчване"): df_output['QTA'],
+            ("", "Цена"): df_output['FPC Price w/o VAT in EUR'],
+            ("", "Валута"): "eur",
+            ("", "Бележка"): df_output['Cod+Color'],
+            ("", "Активна"): "Y",
+            ("", "Активна за Web"): "Y",
+            ("", "Ограничения в сметки"): "без ограничения",
+            ("", "Процент ДДС"): "",
+            # Нови колони с ID-та
+            ("14", "Размер сайт"): df_output['TAGLIA'],
+            ("107", "Цвят сайт"): df_output['Cod Color'],
+            ("13", "SKU"): df_output['SKU Completo'],
+            ("109", "Категория 1"): df_output['Категория_1'],
+            ("110", "Категория 2"): df_output['Категория_2'],
+            ("111", "Категория 3"): df_output['Категория_3'],
+            ("15", "Бранд"): df_output['BRAND'],
+            ("2", "Пол"): df_output['GEN.BG'],
+            ("5", "Категория"): df_output['CATEG.BG'],
+            ("6", "Сезон"): df_output['STAG.'],
+            ("108", "Цена срв. сайт"): df_output['PREZZO NEGOZIO'],
+            ("113", "Код таблица за размери"): "",
+            ("103", "Доствчик"): [supplier_name] * len(df_output),
+        }
+
+        df_gensoft = pd.DataFrame(gensoft_data)
+        # Настройка на MultiIndex колони
+        df_gensoft.columns = pd.MultiIndex.from_tuples(df_gensoft.columns)
 
         gensoft_bytes = to_excel_bytes(df_gensoft)
         gensoft_filename = f"Import_Gensoft_({data}).xlsx"
@@ -659,7 +690,14 @@ if uploaded_file is not None:
 
         # Преглед на Import Gensoft
         with st.expander("Преглед на Import Gensoft"):
-            st.dataframe(df_gensoft, use_container_width=True)
+            # Флатване на MultiIndex за преглед в Streamlit (за избягване на грешки в дисплея)
+            df_gensoft_preview = df_gensoft.copy()
+            if isinstance(df_gensoft_preview.columns, pd.MultiIndex):
+                df_gensoft_preview.columns = [
+                    f"{col[0]} {col[1]}".strip() if col[0] else col[1] 
+                    for col in df_gensoft_preview.columns
+                ]
+            st.dataframe(df_gensoft_preview, use_container_width=True)
 
 else:
     st.info("Качете Excel файл, за да започнете обработката.")
