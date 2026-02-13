@@ -338,10 +338,9 @@ def to_excel_bytes(df, sheet_name='Sheet1'):
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if isinstance(df.columns, pd.MultiIndex):
             # Запис на MultiIndex хедърите ръчно
-            # Ред 1: Subtitles (Bulgarian names) - level 1
-            # Ред 2: Titles (numeric IDs) - level 0
+            # Ред 1: Titles (numeric IDs) - level 0
+            # Ред 2: Subtitles (Bulgarian names) - level 1
             header_df = pd.DataFrame(df.columns.tolist()).T
-            header_df = header_df.reindex([1, 0])  # Разменяме редовете (Level 1 отгоре, Level 0 отдолу)
             header_df.to_excel(writer, index=False, header=False, sheet_name=sheet_name, startrow=0)
             
             # Запис на данните от РЕД 3 (индекс 2)
