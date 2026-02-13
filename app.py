@@ -628,7 +628,7 @@ if uploaded_file is not None:
         df_gensoft['Валута на дребно'] = "eur"
         df_gensoft['Доставчик'] = [supplier_name] * len(df_output)
         df_gensoft['К-во за поръчване'] = df_output['QTA']
-        df_gensoft['Цена'] = df_output['PREZZO NEGOZIO']
+        df_gensoft['Цена'] = df_output['FPC Price w/o VAT in EUR']
         df_gensoft['Валута'] = "eur"
         df_gensoft['Бележка'] = df_output['Cod+Color']
         df_gensoft['Активна'] = "Y"
