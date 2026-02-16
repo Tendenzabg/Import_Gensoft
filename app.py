@@ -1,7 +1,126 @@
 import streamlit as st
 import pandas as pd
 import io
+import json
+import os
 from datetime import datetime
+
+# ============================================================
+# КОНФИГУРАЦИЯ НА ПРОФИЛИ
+# ============================================================
+PROFILES = {
+    "Nike Ballistic": {
+        "columns": {
+            "art_num": "Art.num",
+            "code": "Code",
+            "size": "SizeConverted",
+            "description": "Description",
+            "season": "Season",
+            "barcode": "Barcode",
+            "qta": "Dlv.qty",
+            "price_eur": "FPC Price w/o VAT in EUR",
+            "division": "Division",
+            "gender": "Gender",
+            "silhouette": "Silhouette",
+        },
+        "defaults": {
+            "brand": "NIKE",
+            "price_multiplier": 1.8
+        }
+    },
+    "New Balance Ballistic": {
+        "columns": {
+            "art_num": "Model Number",
+            "code": "Color Code",
+            "size": "Size",
+            "description": "Item Description",
+            "season": "Season",
+            "barcode": "EAN",
+            "qta": "Quantity",
+            "price_eur": "Price EUR",
+            "division": "Division",
+            "gender": "Gender",
+            "silhouette": "Category",
+            "cod_color": "Color Code",
+        },
+        "defaults": {
+            "brand": "NEW BALANCE",
+            "price_multiplier": 1.8
+        }
+    },
+    "On Ballistic": {
+        "columns": {
+            "art_num": "Article Number",
+            "code": "Color",
+            "size": "Size",
+            "description": "Item Name",
+            "season": "Season",
+            "barcode": "GTIN",
+            "qta": "Qty",
+            "price_eur": "Cost EUR",
+            "division": "Product Group",
+            "gender": "Sex",
+            "silhouette": "Product Type",
+        },
+        "defaults": {
+            "brand": "ON",
+            "price_multiplier": 1.8
+        }
+    },
+    "General Ballistic": {
+        "columns": {
+            "art_num": "Model",
+            "code": "Factory Code",
+            "size": "Size",
+            "description": "Item Name",
+            "season": "Season",
+            "barcode": "EAN",
+            "qta": "Qty",
+            "price_eur": "Price EUR",
+            "division": "Category",
+            "gender": "Gender",
+            "silhouette": "Tipo",
+        },
+        "defaults": {
+            "brand": "GENERAL",
+            "price_multiplier": 2.0
+        }
+    }
+}
+
+CONFIG_FILE = "profile_mappings.json"
+
+def load_persistent_configurations():
+    """Зарежда персонализирани мапинги от JSON файл."""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            st.error(f"Грешка при зареждане на конфигурация: {e}")
+    return {}
+
+def save_persistent_configurations(configs):
+    """Записва персонализирани мапинги в JSON файл."""
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(configs, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        st.error(f"Грешка при запис на конфигурация: {e}")
+
+# Инициализация на сесийното състояние с мапингите
+if 'profile_configs' not in st.session_state:
+    st.session_state['profile_configs'] = load_persistent_configurations()
+
+# Гарантираме, че всички нови дефолтни ключове съществуват (пачване на стари сесии)
+for p_name, p_data in PROFILES.items():
+    if p_name not in st.session_state['profile_configs']:
+        st.session_state['profile_configs'][p_name] = p_data['columns'].copy()
+    else:
+        # Добавяме липсващи ключове от новата версия на PROFILES
+        for col_key, col_default in p_data['columns'].items():
+            if col_key not in st.session_state['profile_configs'][p_name]:
+                st.session_state['profile_configs'][p_name][col_key] = col_default
 
 # ============================================================
 # НАСТРОЙКИ НА СТРАНИЦАТА
@@ -19,8 +138,14 @@ st.set_page_config(
 # Division -> Категория BG
 DIVISION_MAP = {
     'APP': 'Дрехи',
+    'APPAREL': 'Дрехи',
+    'CLOTHES': 'Дрехи',
     'FTW': 'Обувки',
+    'FOOTWEAR': 'Обувки',
+    'SHOES': 'Обувки',
     'EQU': 'Аксесоари',
+    'EQUIPMENT': 'Аксесоари',
+    'ACCESSORIES': 'Аксесоари',
 }
 
 # Gender -> GEN.BG
@@ -46,6 +171,9 @@ GENDER_MAP = {
     'GRD SCHOOL UNS': 'Деца унисекс',
     'PRE SCHOOL UNSX': 'Деца унисекс',
     'TODDLER UNISEX': 'Унисекс',
+    'KIDS BOY': 'Деца',
+    'KIDS GIRL': 'Деца',
+    'KIDS UNISEX': 'Деца',
 }
 
 # GEN.BG -> Категория_1
@@ -65,6 +193,7 @@ SESSO_MAP = {
     'Момчета начално учулище': 'Деца',
     'Малки деца': 'Деца',
     'Младежи': 'Деца',
+    'Деца': 'Деца',
 }
 
 # Категория_1 -> префикс за Категория_2
@@ -90,6 +219,7 @@ TIPO_MAP = {
     'Socks': 'Чорапи',
     'Body': 'Боди',
     'Sandals': 'Сандали',
+    'CLASSIC RUNNING': 'Маратонки',
     'SHORT SLEEVE TOP': 'Тениска',
     'LOW TOP': 'Маратонки',
     'UPPER THIGH LENGTH SHORT': 'Къс панталон',
@@ -255,28 +385,98 @@ def get_cat3_value(cat1, tipo_bg):
     return f'{prefix} {tipo_bg.lower()}'
 
 
-def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
+def get_multi_col_data(df, col_spec, sep=" "):
+    """Извлича данни от една или няколко колони (съединени с '+')."""
+    if not col_spec:
+        return ""
+    
+    parts = [p.strip() for p in str(col_spec).split('+')]
+    valid_parts = [p for p in parts if p in df.columns]
+    
+    if not valid_parts:
+        return ""
+        
+    # Съединяваме стойностите със зададения сепаратор
+    combined = df[valid_parts[0]].astype(str)
+    for p in valid_parts[1:]:
+        combined = combined + sep + df[p].astype(str)
+    
+    return combined
+
+
+def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE", profile_name=""):
     """Обработва DataFrame с всички 23 трансформации."""
 
     if tipo_map is None:
         tipo_map = TIPO_MAP
+    
+    # Нормализираме речника на типовете към главни букви за по-добро съвпадение
+    tipo_map_upper = {str(k).upper(): v for k, v in tipo_map.items()}
 
     result = pd.DataFrame()
 
+    # Извличане на имена на колони от мапинга
+    c_art = col_map.get('art_num', 'Art.num')
+    c_code = col_map.get('code', 'Code')
+    c_size = col_map.get('size', 'SizeConverted')
+    c_desc = col_map.get('description', 'Description')
+    c_stag = col_map.get('season', 'Season')
+    c_bar = col_map.get('barcode', 'Barcode')
+    c_qta = col_map.get('qta', 'Dlv.qty')
+    c_price = col_map.get('price_eur', 'FPC Price w/o VAT in EUR')
+    c_div = col_map.get('division', 'Division')
+    c_gen = col_map.get('gender', 'Gender')
+    c_tipo = col_map.get('silhouette', 'Silhouette')
+    c_cod_color = col_map.get('cod_color', '')
+
+    # Проверка за наличие на колони (включително мулти-колони)
+    all_specified_cols = []
+    check_list = [c_art, c_code, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
+    if c_cod_color:
+        check_list.append(c_cod_color)
+    
+    for spec in check_list:
+        if spec:
+            all_specified_cols.extend([p.strip() for p in str(spec).split('+')])
+            
+    missing_cols = [c for c in all_specified_cols if c not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Липсващи колони в оригиналния (качения) файл: {', '.join(set(missing_cols))}")
+
     # 1-10: Основни колони
-    result['Cod+Color'] = df['Art.num']
-    result['Cod.Nike'] = df['Code']
-    result['Cod Color'] = df['Art.num'].astype(str).str.split('-', n=1).str[1]
-    result['TAGLIA'] = df['SizeConverted']
-    result['SKU Completo'] = df['Art.num'].astype(str) + '-' + df['SizeConverted'].astype(str)
-    result['DESCRIZIONE'] = df['Description']
-    result['STAG.'] = df['Season']
-    result['BARCODE'] = df['Barcode']
-    result['QTA'] = df['Dlv.qty']
-    result['FPC Price w/o VAT in EUR'] = df['FPC Price w/o VAT in EUR'].round(2)
+    if profile_name == "New Balance Ballistic":
+        # Специална логика за New Balance
+        result['Cod+Color'] = get_multi_col_data(df, c_art, sep="-")
+        
+        # Reverted: Cod Color takes data from the mapped cod_color column
+        result['Cod Color'] = get_multi_col_data(df, c_cod_color if c_cod_color else c_code)
+    else:
+        # Стандартна логика за Nike и други
+        result['Cod+Color'] = get_multi_col_data(df, c_art, sep=" ")
+        # Екстракция на цвят от артикулен номер (допускаме '-' като разделител в оригиналния Nike формат)
+        art_data_raw = get_multi_col_data(df, c_art, sep="-")
+        result['Cod Color'] = art_data_raw.astype(str).str.split('-', n=1).str[1]
+
+    result['Cod.Nike'] = get_multi_col_data(df, c_code)
+    result['TAGLIA'] = get_multi_col_data(df, c_size)
+
+    if profile_name == "New Balance Ballistic":
+        result['SKU Completo'] = result['Cod+Color'].astype(str) + '-' + result['TAGLIA'].astype(str)
+    else:
+        # За Nike използваме оригиналния арт. номер без промяна на сепаратора за SKU
+        art_orig = get_multi_col_data(df, c_art, sep="") 
+        result['SKU Completo'] = art_orig.astype(str) + '-' + result['TAGLIA'].astype(str)
+    result['DESCRIZIONE'] = get_multi_col_data(df, c_desc)
+    result['STAG.'] = get_multi_col_data(df, c_stag)
+    result['BARCODE'] = get_multi_col_data(df, c_bar)
+    result['QTA'] = get_multi_col_data(df, c_qta)
+    
+    # За цената не поддържаме конкатенация, взимаме първата посочена колона
+    price_col = [p.strip() for p in str(c_price).split('+')][0]
+    result['FPC Price w/o VAT in EUR'] = df[price_col].round(2)
 
     # 11: PRZ DETT
-    result['PRZ DETT'] = (df['FPC Price w/o VAT in EUR'] * price_multiplier).round(2)
+    result['PRZ DETT'] = (df[price_col] * price_multiplier).round(2)
 
     # 12: PREZZO NEGOZIO
     result['PREZZO NEGOZIO'] = result['PRZ DETT'].apply(round_to_price_point)
@@ -285,12 +485,13 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
     result['BRAND'] = brand
 
     # 14-16: Оригинални колони преименувани
-    result['CATEGORIA'] = df['Division']
-    result['GENERE'] = df['Gender']
-    result['TIPO'] = df['Silhouette']
+    result['CATEGORIA'] = get_multi_col_data(df, c_div)
+    result['GENERE'] = get_multi_col_data(df, c_gen)
+    result['TIPO'] = get_multi_col_data(df, c_tipo)
 
     # 17: CATEG.BG
-    result['CATEG.BG'] = df['Division'].map(DIVISION_MAP)
+    div_data = get_multi_col_data(df, c_div).astype(str).str.upper().str.strip()
+    result['CATEG.BG'] = div_data.map(DIVISION_MAP)
 
     # NEW: Група = BRAND + CATEG.BG (Uppercase)
     result['Група'] = (
@@ -299,10 +500,12 @@ def process_file(df, price_multiplier=1.8, tipo_map=None, brand="NIKE"):
     ).str.upper().str.strip()
 
     # 18: GEN.BG
-    result['GEN.BG'] = df['Gender'].map(GENDER_MAP)
+    gen_data = get_multi_col_data(df, c_gen)
+    result['GEN.BG'] = gen_data.map(GENDER_MAP)
 
     # 19: TIPO.BG
-    result['TIPO.BG'] = df['Silhouette'].map(tipo_map)
+    tipo_orig_data = get_multi_col_data(df, c_tipo).astype(str).str.upper().str.strip()
+    result['TIPO.BG'] = tipo_orig_data.map(tipo_map_upper)
 
     # 20: Категория_1
     result['Категория_1'] = result['GEN.BG'].map(SESSO_MAP)
@@ -364,11 +567,51 @@ st.markdown("Качете Excel файл за доставка, обработе
 with st.sidebar:
     st.header("Настройки")
 
-    profile = st.selectbox(
+    profile_name = st.selectbox(
         "Профил на обработка",
-        ["Nike Ballistic"],
+        list(PROFILES.keys()),
         help="Изберете профил за трансформация на данни"
     )
+    
+    selected_profile = PROFILES[profile_name]
+    
+    # Редактор на мапинг на колони
+    with st.expander("🛠️ Мапинг на колони", expanded=False):
+        st.markdown("##### Изберете колоните от оригиналния файл, които да попълнят полетата в изходния файл (Еlaborato).")
+        st.info("💡 Можете да съедините няколко колони, като използвате знака **+** (напр. `Марка + Модел`).")
+        st.info("Структурата на изходния файл е фиксирана. Тук определяте откъде идват данните.")
+        
+        current_mappings = st.session_state['profile_configs'][profile_name]
+        updated_mappings = {}
+        
+        # Списък с етикети за интерфейса
+        labels_dict = {
+            "art_num": "→ Cod+Color (Артикулен номер)",
+            "code": "→ Cod.Nike (Код)",
+            "size": "→ TAGLIA (Размер)",
+            "description": "→ DESCRIZIONE (Описание)",
+            "season": "→ STAG. (Сезон)",
+            "barcode": "→ BARCODE (Баркод)",
+            "qta": "→ QTA (Количество)",
+            "price_eur": "→ FPC Price EUR (Цена без ДДС)",
+            "division": "→ CATEGORIA (Дивизия)",
+            "gender": "→ GENERE (Пол)",
+            "silhouette": "→ TIPO (Силует)",
+            "cod_color": "→ Cod Color (Цвят)"
+        }
+
+        for key, val in current_mappings.items():
+            label = labels_dict.get(key, key)
+            updated_mappings[key] = st.text_input(label, value=val, key=f"inp_{profile_name}_{key}")
+        
+        # Обновяваме сесийното състояние
+        st.session_state['profile_configs'][profile_name] = updated_mappings
+        
+        if st.button("💾 Запази мапинга за този профил", use_container_width=True):
+            save_persistent_configurations(st.session_state['profile_configs'])
+            st.success(f"Конфигурацията за **{profile_name}** е запазена!")
+    
+    col_map = st.session_state['profile_configs'][profile_name]
 
     st.divider()
 
@@ -376,14 +619,14 @@ with st.sidebar:
         "Множител на цена (PRZ DETT)",
         min_value=1.0,
         max_value=5.0,
-        value=1.8,
+        value=selected_profile['defaults']['price_multiplier'],
         step=0.1,
         help="Цената FPC се умножава по тази стойност"
     )
 
     brand_name = st.text_input(
         "Марка",
-        value="NIKE",
+        value=selected_profile['defaults']['brand'],
         help="Име на марката за колона BRAND"
     )
 
@@ -417,14 +660,14 @@ with st.sidebar:
             st.warning("Не може да се прочете речникът. Използва се вграденият речник.")
 
     st.divider()
-    st.caption("v1.0 - Обработка на файлове Gensoft")
+    st.caption(f"v1.1 - Профил: {profile_name}")
 
 # --- ОСНОВНА ОБЛАСТ ---
 
 uploaded_file = st.file_uploader(
     "Качете Excel файл за обработка",
     type=['xlsx', 'xls'],
-    help="Файл за доставка Nike/Ballistic с колони: Art.num, Code, SizeConverted и др."
+    help=f"Файл за обработка с профил {profile_name}. Очаквани колони: {', '.join(col_map.values())}"
 )
 
 if uploaded_file is not None:
@@ -445,15 +688,20 @@ if uploaded_file is not None:
     with st.expander("Покажи преглед на оригиналните данни", expanded=False):
         st.dataframe(df_input.head(10), use_container_width=True)
 
-    # Проверка на необходимите колони
-    required_cols = ['Art.num', 'Code', 'SizeConverted', 'Description', 'Season',
-                     'Barcode', 'Dlv.qty', 'FPC Price w/o VAT in EUR',
-                     'Division', 'Gender', 'Silhouette']
-    missing_cols = [c for c in required_cols if c not in df_input.columns]
+    # Проверка на необходимите колони (включително конкатенирани с +)
+    all_mapped_cols = []
+    for val in col_map.values():
+        if val:
+            all_mapped_cols.extend([p.strip() for p in str(val).split('+')])
+            
+    missing_cols = [c for c in set(all_mapped_cols) if c not in df_input.columns]
 
     if missing_cols:
-        st.error(f"Липсващи колони във файла: **{', '.join(missing_cols)}**")
-        st.info(f"Намерени колони: {', '.join(df_input.columns.tolist())}")
+        st.error(f"⚠️ **Липсващи колони** във файла за профил **{profile_name}**")
+        st.write(f"Следните колони не бяха намерени в качения файл: `{', '.join(missing_cols)}`")
+        st.info(f"💡 Проверете мапинга в секция **🛠️ Мапинг на колони** или качете друг файл.")
+        with st.expander("Виж всички налични колони в качения файл"):
+            st.write(df_input.columns.tolist())
         st.stop()
 
     st.divider()
@@ -463,15 +711,21 @@ if uploaded_file is not None:
         with st.spinner("Обработка в ход..."):
             tipo_map_to_use = custom_tipo_map if custom_tipo_map else TIPO_MAP
 
-            df_output = process_file(
-                df_input,
-                price_multiplier=price_multiplier,
-                tipo_map=tipo_map_to_use,
-                brand=brand_name,
-            )
-
-            st.session_state['df_output'] = df_output
-            st.session_state['elaborated'] = True
+            try:
+                df_output = process_file(
+                    df_input,
+                    col_map=col_map,
+                    price_multiplier=price_multiplier,
+                    tipo_map=tipo_map_to_use,
+                    brand=brand_name,
+                    profile_name=profile_name,
+                )
+                st.session_state['df_output'] = df_output
+                st.session_state['elaborated'] = True
+            except ValueError as ve:
+                st.error(f"Грешка при обработка: {ve}")
+            except Exception as e:
+                st.error(f"Неочаквана грешка: {e}")
 
     # Показване на резултата
     if st.session_state.get('elaborated', False):
@@ -543,12 +797,19 @@ if uploaded_file is not None:
             )
 
         # --- ОПАКОВЪЧЕН ЛИСТ ---
-        df_packing = df_output.groupby('Cod+Color', sort=False).agg(
-            DESCRIZIONE=('DESCRIZIONE', 'first'),
-            CATEG_BG=('CATEG.BG', 'first'),
-            QTA=('QTA', 'sum'),
-            PREZZO_NEGOZIO=('PREZZO NEGOZIO', 'first'),
-        ).reset_index()
+        if profile_name == "New Balance Ballistic":
+            df_packing = df_output.groupby(['Cod+Color', 'DESCRIZIONE'], sort=False).agg(
+                CATEG_BG=('CATEG.BG', 'first'),
+                QTA=('QTA', 'sum'),
+                PREZZO_NEGOZIO=('PREZZO NEGOZIO', 'first'),
+            ).reset_index()
+        else:
+            df_packing = df_output.groupby('Cod+Color', sort=False).agg(
+                DESCRIZIONE=('DESCRIZIONE', 'first'),
+                CATEG_BG=('CATEG.BG', 'first'),
+                QTA=('QTA', 'sum'),
+                PREZZO_NEGOZIO=('PREZZO NEGOZIO', 'first'),
+            ).reset_index()
 
         # Добави ред с тотал в края
         packing_total_row = pd.DataFrame({
