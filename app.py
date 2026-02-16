@@ -388,15 +388,19 @@ def get_cat3_value(cat1, tipo_bg):
 def get_multi_col_data(df, col_spec, sep=" "):
     """Извлича данни от една или няколко колони (съединени с '+')."""
     if not col_spec:
-        return ""
+        return pd.Series([""] * len(df))
     
     parts = [p.strip() for p in str(col_spec).split('+')]
     valid_parts = [p for p in parts if p in df.columns]
     
     if not valid_parts:
-        return ""
-        
-    # Съединяваме стойностите със зададения сепаратор
+        return pd.Series([""] * len(df))
+    
+    # Режим за една колона - запазваме оригиналния тип ако е възможно
+    if len(valid_parts) == 1:
+        return df[valid_parts[0]]
+    
+    # Режим за няколко колони - конкатенираме като низове
     combined = df[valid_parts[0]].astype(str)
     for p in valid_parts[1:]:
         combined = combined + sep + df[p].astype(str)
@@ -468,8 +472,13 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         result['SKU Completo'] = art_orig.astype(str) + '-' + result['TAGLIA'].astype(str)
     result['DESCRIZIONE'] = get_multi_col_data(df, c_desc)
     result['STAG.'] = get_multi_col_data(df, c_stag)
-    result['BARCODE'] = get_multi_col_data(df, c_bar)
-    result['QTA'] = get_multi_col_data(df, c_qta)
+    # Гарантираме, че BARCODE се чете като чист низ (без .0 ако е число)
+    bar_raw = get_multi_col_data(df, c_bar)
+    result['BARCODE'] = bar_raw.astype(str).str.replace(r'\.0$', '', regex=True)
+    
+    # Гарантираме, че QTA е число, за да работи сумирането
+    qta_raw = get_multi_col_data(df, c_qta)
+    result['QTA'] = pd.to_numeric(qta_raw, errors='coerce').fillna(0).astype(int)
     
     # За цената не поддържаме конкатенация, взимаме първата посочена колона
     price_col = [p.strip() for p in str(c_price).split('+')][0]
@@ -781,22 +790,29 @@ if uploaded_file is not None:
         data = datetime.now().strftime("%d%m%Y")
         filename = f"Elaborato_({data}).xlsx"
 
-        excel_bytes = to_excel_bytes(df_output)
+        try:
+            excel_bytes = to_excel_bytes(df_output)
+            col_dl1, col_dl2 = st.columns(2)
+            col_dl3, col_dl4 = st.columns(2)
 
-        col_dl1, col_dl2 = st.columns(2)
-        col_dl3, col_dl4 = st.columns(2)
-
-        with col_dl1:
-            st.download_button(
-                label="Изтегли обработен файл",
-                data=excel_bytes,
-                file_name=filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary",
-                use_container_width=True,
-            )
+            with col_dl1:
+                st.download_button(
+                    label="Изтегли обработен файл",
+                    data=excel_bytes,
+                    file_name=filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    use_container_width=True,
+                )
+        except Exception as e:
+            st.error(f"Грешка при генериране на основния Excel файл: {e}")
+            excel_bytes = None
 
         # --- ОПАКОВЪЧЕН ЛИСТ ---
+        # Дефанзивна проверка: Гарантираме, че QTA е число преди групирането
+        if 'QTA' in df_output.columns:
+            df_output['QTA'] = pd.to_numeric(df_output['QTA'], errors='coerce').fillna(0).astype(int)
+
         if profile_name == "New Balance Ballistic":
             df_packing = df_output.groupby(['Cod+Color', 'DESCRIZIONE'], sort=False).agg(
                 CATEG_BG=('CATEG.BG', 'first'),
@@ -844,6 +860,10 @@ if uploaded_file is not None:
             )
 
         # --- ОПАКОВЪЧЕН ЛИСТ ДЕТАЙЛЕН ---
+        # Гарантираме числови стойности и тук
+        if 'QTA' in df_output.columns:
+            df_output['QTA'] = pd.to_numeric(df_output['QTA'], errors='coerce').fillna(0).astype(int)
+        
         df_packing_dett = df_output.groupby(['Cod.Nike', 'Cod Color', 'TAGLIA'], sort=False).agg(
             DESCRIZIONE=('DESCRIZIONE', 'first'),
             CATEG_BG=('CATEG.BG', 'first'),
