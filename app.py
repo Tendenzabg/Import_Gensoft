@@ -60,7 +60,7 @@ PROFILES = {
             "price_eur": "Cost EUR",
             "division": "Product Group",
             "gender": "Sex",
-            "silhouette": "Product Type",
+            "silhouette": "Silouette",
         },
         "defaults": {
             "brand": "ON",
@@ -351,6 +351,67 @@ def load_tipo_dictionary(uploaded_file):
         return None
 
 
+def load_size_table(uploaded_file):
+    """Зарежда таблица за размери (Size Table) от Excel файл.
+    Пробва първо лист 'Size_table', ако не съществува - първия наличен.
+    Очаквани колони: 'brand', 'div', 'style', 'size_table'.
+    """
+    try:
+        excel_file = pd.ExcelFile(uploaded_file)
+        sheet_name = 'Size_table' if 'Size_table' in excel_file.sheet_names else excel_file.sheet_names[0]
+        
+        df_size = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+        mapping = {}
+        
+        # Нормализираме имената на колоните
+        cols_lower = {str(c).lower().strip(): c for c in df_size.columns}
+        
+        # Разширено търсене на колони (поддържа и БГ имена)
+        brand_col = cols_lower.get('brand') or cols_lower.get('бранд')
+        div_col = cols_lower.get('categoria') or cols_lower.get('div') or cols_lower.get('дивизия') or cols_lower.get('divisiya')
+        style_col = cols_lower.get('genere') or cols_lower.get('style') or cols_lower.get('стил') or cols_lower.get('stil')
+        code_col = cols_lower.get('size_table') or cols_lower.get('код') or cols_lower.get('size code')
+        
+        if not (brand_col and style_col and code_col):
+            if len(df_size.columns) >= 3:
+                # Fallback към индекси ако не намерим имена
+                brand_col = df_size.columns[0]
+                # Ако има 4 колони, приемаме че втората е DIV
+                if len(df_size.columns) >= 4:
+                    div_col = df_size.columns[1]
+                    style_col = df_size.columns[2]
+                    code_col = df_size.columns[3]
+                else:
+                    div_col = None
+                    style_col = df_size.columns[1]
+                    code_col = df_size.columns[2]
+            else:
+                return None
+        
+        for _, row in df_size.iterrows():
+            b_val = str(row[brand_col]).strip().upper() if pd.notna(row[brand_col]) else ""
+            d_val = str(row[div_col]).strip().upper() if div_col and pd.notna(row[div_col]) else ""
+            s_val = str(row[style_col]).strip().upper() if pd.notna(row[style_col]) else ""
+            c_val = str(row[code_col]).strip() if pd.notna(row[code_col]) else ""
+            
+            # Почистване на "NAN" низове
+            if b_val == "NAN": b_val = ""
+            if d_val == "NAN": d_val = ""
+            if s_val == "NAN": s_val = ""
+            if c_val == "NAN": c_val = ""
+            
+            if b_val and s_val and c_val and b_val != 'BRAND':
+                # Ключ 1: С дивизия
+                mapping[(b_val, d_val, s_val)] = c_val
+                # Ключ 2: Без дивизия (като fallback)
+                if d_val:
+                    mapping[(b_val, "", s_val)] = c_val
+                    
+        return mapping if mapping else None
+    except Exception:
+        return None
+
+
 def round_to_price_point(value):
     """Закръгля до най-близката търговска ценова точка. При равенство -> нагоре."""
     best = None
@@ -371,7 +432,7 @@ def get_cat3_value(cat1, tipo_bg):
     tipo_lower = str(tipo_bg).lower().strip()
     prefixes = GENDER_PREFIXES.get(cat1)
     if not prefixes:
-        return f'{cat1} {tipo_bg}'
+        return f'{cat1} {str(tipo_bg).strip().capitalize()}'
 
     if tipo_lower in FEMININE_WORDS:
         prefix = prefixes['f']
@@ -382,7 +443,7 @@ def get_cat3_value(cat1, tipo_bg):
     else:
         prefix = prefixes['m']  # по подразбиране мъжки род
 
-    return f'{prefix} {tipo_bg.lower()}'
+    return f'{prefix} {str(tipo_bg).strip().capitalize()}'
 
 
 def get_multi_col_data(df, col_spec, sep=" "):
@@ -408,8 +469,8 @@ def get_multi_col_data(df, col_spec, sep=" "):
     return combined
 
 
-def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE", profile_name=""):
-    """Обработва DataFrame с всички 23 трансформации."""
+def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE", profile_name="", size_map=None):
+    """Обработва DataFrame с всички 24 трансформации."""
 
     if tipo_map is None:
         tipo_map = TIPO_MAP
@@ -454,6 +515,11 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         
         # Reverted: Cod Color takes data from the mapped cod_color column
         result['Cod Color'] = get_multi_col_data(df, c_cod_color if c_cod_color else c_code)
+    elif profile_name == "On Ballistic":
+        # Cod Color взима данни директно от колоната 'Color' (мапната към c_code)
+        result['Cod Color'] = get_multi_col_data(df, c_code)
+        # Cod+Color = Article Number (c_art) + '-' + Color (c_code)
+        result['Cod+Color'] = get_multi_col_data(df, c_art).astype(str) + '-' + result['Cod Color'].astype(str)
     else:
         # Стандартна логика за Nike и други
         result['Cod+Color'] = get_multi_col_data(df, c_art, sep=" ")
@@ -461,10 +527,13 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         art_data_raw = get_multi_col_data(df, c_art, sep="-")
         result['Cod Color'] = art_data_raw.astype(str).str.split('-', n=1).str[1]
 
-    result['Cod.Nike'] = get_multi_col_data(df, c_code)
+    if profile_name == "On Ballistic":
+        result['Cod.Nike'] = get_multi_col_data(df, c_art)
+    else:
+        result['Cod.Nike'] = get_multi_col_data(df, c_code)
     result['TAGLIA'] = get_multi_col_data(df, c_size)
 
-    if profile_name == "New Balance Ballistic":
+    if profile_name in ["New Balance Ballistic", "On Ballistic"]:
         result['SKU Completo'] = result['Cod+Color'].astype(str) + '-' + result['TAGLIA'].astype(str)
     else:
         # За Nike използваме оригиналния арт. номер без промяна на сепаратора за SKU
@@ -510,7 +579,12 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
 
     # 18: GEN.BG
     gen_data = get_multi_col_data(df, c_gen)
-    result['GEN.BG'] = gen_data.map(GENDER_MAP)
+    if profile_name == "On Ballistic":
+        on_map = GENDER_MAP.copy()
+        on_map.update({'w': 'Жени', 'W': 'Жени', 'm': 'Мъже', 'M': 'Мъже'})
+        result['GEN.BG'] = gen_data.map(on_map)
+    else:
+        result['GEN.BG'] = gen_data.map(GENDER_MAP)
 
     # 19: TIPO.BG
     tipo_orig_data = get_multi_col_data(df, c_tipo).astype(str).str.upper().str.strip()
@@ -538,6 +612,35 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         result['BRAND'].fillna('').astype(str) + ' ' +
         result['DESCRIZIONE'].fillna('').astype(str)
     ).str.strip()
+
+    # 24: Код таблицаразмери
+    if size_map:
+        # Използваме Brand, Категория (Division) и Категория_2 за мапинг към таблицата с размери
+        # CATEGORIA е оригиналната дивизия (напр. 'APP', 'FTW')
+        # Категория_2 съответства на 'Style' в Size_table (напр. 'Мъжки Обувки')
+        current_brand_upper = str(brand).strip().upper()
+        
+        def get_size_code(row):
+            # Il 'Style' della Size_table corrisponde alla colonna originale Gender (es: WOMENS, MENS)
+            style_val = str(row['GENERE']).strip().upper() if pd.notna(row['GENERE']) else ""
+            cat_orig = str(row['CATEGORIA']).strip().upper() if pd.notna(row['CATEGORIA']) else ""
+            
+            if not style_val:
+                return ""
+            
+            # 1. Пробваме мач с Brand + DIV + Style
+            current_brand_upper = str(brand).strip().upper()
+            key_full = (current_brand_upper, cat_orig, style_val)
+            if key_full in size_map:
+                return size_map[key_full]
+            
+            # 2. Fallback: Пробваме без DIV (Brand + "" + Style)
+            key_fallback = (current_brand_upper, "", style_val)
+            return size_map.get(key_fallback, "")
+
+        result['Код таблицаразмери'] = result.apply(get_size_code, axis=1)
+    else:
+        result['Код таблицаразмери'] = ""
 
     return result
 
@@ -668,6 +771,25 @@ with st.sidebar:
         else:
             st.warning("Не може да се прочете речникът. Използва се вграденият речник.")
 
+    st.subheader("Таблица с размери")
+    size_file = st.file_uploader(
+        "Качете Size Table (по избор)",
+        type=['xlsx'],
+        help="Excel файл с лист 'Size_table' за мапинг на Код таблицаразмери."
+    )
+
+    size_table_map = None
+    if size_file is not None:
+        size_table_map = load_size_table(size_file)
+        if size_table_map:
+            st.success(f"Таблицата за размери е заредена: {len(size_table_map)} записа")
+            with st.sidebar.expander("🔍 Дебъг: Преглед на Size Table", expanded=False):
+                st.write("Първите 10 записа (Brand, Div, Style) -> Code:")
+                for k, v in list(size_table_map.items())[:10]:
+                    st.code(f"{k} -> {v}")
+        else:
+            st.warning("Не може да се прочете таблицата за размери.")
+
     st.divider()
     st.caption(f"v1.1 - Профил: {profile_name}")
 
@@ -728,6 +850,7 @@ if uploaded_file is not None:
                     tipo_map=tipo_map_to_use,
                     brand=brand_name,
                     profile_name=profile_name,
+                    size_map=size_table_map,
                 )
                 st.session_state['df_output'] = df_output
                 st.session_state['elaborated'] = True
@@ -940,11 +1063,11 @@ if uploaded_file is not None:
             ("110", "Категория 2"): df_output['Категория_2'],
             ("111", "Категория 3"): df_output['Категория_3'],
             ("15", "Бранд"): df_output['BRAND'],
-            ("2", "Пол"): df_output['GEN.BG'],
+            ("2", "Пол"): df_output['Категория_1'],
             ("5", "Категория"): df_output['CATEG.BG'],
             ("6", "Сезон"): df_output['STAG.'],
             ("108", "Цена срв. сайт"): df_output['PREZZO NEGOZIO'],
-            ("113", "Код таблица за размери"): "",
+            ("113", "Код таблица за размери"): df_output['Код таблицаразмери'],
             ("103", "Доствчик"): [supplier_name] * len(df_output),
         }
 
