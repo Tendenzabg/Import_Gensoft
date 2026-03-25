@@ -123,6 +123,9 @@ for p_name, p_data in PROFILES.items():
         for col_key, col_default in p_data['columns'].items():
             if col_key not in st.session_state['profile_configs'][p_name]:
                 st.session_state['profile_configs'][p_name][col_key] = col_default
+    # Гарантираме, че __price_multiplier__ съществува (добавяме ако липсва)
+    if '__price_multiplier__' not in st.session_state['profile_configs'][p_name]:
+        st.session_state['profile_configs'][p_name]['__price_multiplier__'] = p_data['defaults']['price_multiplier']
 
 # ============================================================
 # НАСТРОЙКИ НА СТРАНИЦАТА
@@ -722,14 +725,19 @@ with st.sidebar:
             label = labels_dict.get(key, key)
             updated_mappings[key] = st.text_input(label, value=val, key=f"inp_{profile_name}_{key}")
         
-        # Обновяваме сесийното състояние
-        st.session_state['profile_configs'][profile_name] = updated_mappings
+        # Обновяваме сесийното състояние (само ключовете di mapping, senza __price_multiplier__)
+        st.session_state['profile_configs'][profile_name].update(updated_mappings)
         
         if st.button("💾 Запази мапинга за този профил", use_container_width=True):
+            # Salviamo anche il moltiplicatore corrente dalla session_state
+            st.session_state['profile_configs'][profile_name]['__price_multiplier__'] = \
+                st.session_state.get(f'pm_{profile_name}', selected_profile['defaults']['price_multiplier'])
             save_persistent_configurations(st.session_state['profile_configs'])
             st.success(f"Конфигурацията за **{profile_name}** е запазена!")
     
-    col_map = st.session_state['profile_configs'][profile_name]
+    # Filtriamo le chiavi speciali (come __price_multiplier__) che non sono mapping di colonne
+    col_map = {k: v for k, v in st.session_state['profile_configs'][profile_name].items()
+               if not k.startswith('__')}
 
     st.divider()
 
@@ -737,9 +745,13 @@ with st.sidebar:
         "Множител на цена (PRZ DETT)",
         min_value=1.0,
         max_value=5.0,
-        value=selected_profile['defaults']['price_multiplier'],
+        # Използваме запазената стойност за профила (или фабричния default ако няма)
+        value=float(st.session_state['profile_configs'][profile_name].get(
+            '__price_multiplier__', selected_profile['defaults']['price_multiplier']
+        )),
         step=0.1,
-        help="Цената FPC се умножава по тази стойност"
+        help="Цената FPC се умножава по тази стойност",
+        key=f'pm_{profile_name}'
     )
 
     brand_name = st.text_input(
