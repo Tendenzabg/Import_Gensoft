@@ -51,7 +51,6 @@ PROFILES = {
     "On Ballistic": {
         "columns": {
             "art_num": "Article Number",
-            "code": "Color",
             "size": "Size",
             "description": "Item Name",
             "season": "Season",
@@ -126,6 +125,9 @@ for p_name, p_data in PROFILES.items():
     # Гарантираме, че __price_multiplier__ съществува (добавяме ако липсва)
     if '__price_multiplier__' not in st.session_state['profile_configs'][p_name]:
         st.session_state['profile_configs'][p_name]['__price_multiplier__'] = p_data['defaults']['price_multiplier']
+    # Per On Ballistic, rimuoviamo la chiave 'code' se presente (non usata)
+    if p_name == "On Ballistic" and 'code' in st.session_state['profile_configs'][p_name]:
+        del st.session_state['profile_configs'][p_name]['code']
 
 # ============================================================
 # НАСТРОЙКИ НА СТРАНИЦАТА
@@ -846,10 +848,15 @@ if uploaded_file is not None:
 
     # Проверка на необходимите колони (включително конкатенирани с +)
     all_mapped_cols = []
-    for val in col_map.values():
+    # Chiavi da escludere dalla validazione per profili specifici
+    excluded_keys = set()
+    if profile_name == "On Ballistic":
+        excluded_keys = {'code'}  # 'code' non usato in On Ballistic
+    for k, val in col_map.items():
+        if k in excluded_keys:
+            continue
         if val:
             all_mapped_cols.extend([p.strip() for p in str(val).split('+')])
-            
     missing_cols = [c for c in set(all_mapped_cols) if c not in df_input.columns]
 
     if missing_cols:
