@@ -502,7 +502,11 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
 
     # Проверка за наличие на колони (включително мулти-колони)
     all_specified_cols = []
-    check_list = [c_art, c_code, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
+    # Per On Ballistic, c_code non viene usato (si usano c_cod_color e c_cod_nike al suo posto)
+    if profile_name == "On Ballistic":
+        check_list = [c_art, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
+    else:
+        check_list = [c_art, c_code, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
     if c_cod_color:
         check_list.append(c_cod_color)
     if c_cod_nike:
