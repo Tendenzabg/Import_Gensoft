@@ -722,6 +722,9 @@ with st.sidebar:
         }
 
         for key, val in current_mappings.items():
+            # Saltiamo le chiavi speciali interne (come __price_multiplier__)
+            if key.startswith('__'):
+                continue
             label = labels_dict.get(key, key)
             updated_mappings[key] = st.text_input(label, value=val, key=f"inp_{profile_name}_{key}")
         
