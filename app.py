@@ -61,6 +61,8 @@ PROFILES = {
             "division": "Product Group",
             "gender": "Sex",
             "silhouette": "Silouette",
+            "cod_nike": "Vendor Item No.",
+            "cod_color": "Color",
         },
         "defaults": {
             "brand": "ON",
@@ -493,12 +495,15 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     c_gen = col_map.get('gender', 'Gender')
     c_tipo = col_map.get('silhouette', 'Silhouette')
     c_cod_color = col_map.get('cod_color', '')
+    c_cod_nike = col_map.get('cod_nike', '')
 
     # Проверка за наличие на колони (включително мулти-колони)
     all_specified_cols = []
     check_list = [c_art, c_code, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
     if c_cod_color:
         check_list.append(c_cod_color)
+    if c_cod_nike:
+        check_list.append(c_cod_nike)
     
     for spec in check_list:
         if spec:
@@ -516,10 +521,10 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         # Reverted: Cod Color takes data from the mapped cod_color column
         result['Cod Color'] = get_multi_col_data(df, c_cod_color if c_cod_color else c_code)
     elif profile_name == "On Ballistic":
-        # Cod Color взима данни директно от колоната 'Color' (мапната към c_code)
-        result['Cod Color'] = get_multi_col_data(df, c_code)
-        # Cod+Color = Article Number (c_art) + '-' + Color (c_code)
-        result['Cod+Color'] = get_multi_col_data(df, c_art).astype(str) + '-' + result['Cod Color'].astype(str)
+        # Cod Color взима данни от колоната мапната към cod_color (по подразбиране 'Color')
+        result['Cod Color'] = get_multi_col_data(df, c_cod_color if c_cod_color else c_code)
+        # Cod+Color = Vendor Item No. (c_cod_nike) + '-' + Color (c_cod_color)
+        result['Cod+Color'] = get_multi_col_data(df, c_cod_nike).astype(str) + '-' + result['Cod Color'].astype(str)
     else:
         # Стандартна логика за Nike и други
         result['Cod+Color'] = get_multi_col_data(df, c_art, sep=" ")
@@ -528,7 +533,7 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         result['Cod Color'] = art_data_raw.astype(str).str.split('-', n=1).str[1]
 
     if profile_name == "On Ballistic":
-        result['Cod.Nike'] = get_multi_col_data(df, c_art)
+        result['Cod.Nike'] = get_multi_col_data(df, c_cod_nike if c_cod_nike else 'Vendor Item No.')
     else:
         result['Cod.Nike'] = get_multi_col_data(df, c_code)
     result['TAGLIA'] = get_multi_col_data(df, c_size)
@@ -709,7 +714,8 @@ with st.sidebar:
             "division": "→ CATEGORIA (Дивизия)",
             "gender": "→ GENERE (Пол)",
             "silhouette": "→ TIPO (Силует)",
-            "cod_color": "→ Cod Color (Цвят)"
+            "cod_color": "→ Cod Color (Цвят)",
+            "cod_nike": "→ Cod.Nike (Специфичен код)"
         }
 
         for key, val in current_mappings.items():
