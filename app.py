@@ -30,18 +30,19 @@ PROFILES = {
     },
     "New Balance Ballistic": {
         "columns": {
-            "art_num": "Model Number",
-            "code": "Color Code",
-            "size": "Size",
-            "description": "Item Description",
-            "season": "Season",
-            "barcode": "EAN",
-            "qta": "Quantity",
-            "price_eur": "Price EUR",
-            "division": "Division",
-            "gender": "Gender",
-            "silhouette": "Category",
-            "cod_color": "Color Code",
+            "art_num": "STOCKNO+COLORNAME",
+            "code": "STOCKNO",
+            "color": "COLORNAME",
+            "size": "SIZENAME",
+            "description": "NAME",
+            "season": "season",
+            "barcode": "BARCODE",
+            "qta": "QTY",
+            "price_eur": "WPRICE",
+            "division": "CATEGORY",
+            "gender": "SEX",
+            "silhouette": "GROUP",
+            "cod_color": "COLORNAME",
         },
         "defaults": {
             "brand": "NEW BALANCE",
@@ -500,9 +501,10 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     c_gen = col_map.get('gender', 'Gender')
     c_tipo = col_map.get('silhouette', 'Silhouette')
     c_cod_color = col_map.get('cod_color', '')
+    c_color = col_map.get('color', '')
     c_cod_nike = col_map.get('cod_nike', '')
 
-    # Проверка за наличие на колони (включително мулти-колони)
+    # Proверка за наличие на колони (включително мулти-колони)
     all_specified_cols = []
     # Per On Ballistic, c_code non viene usato (si usano c_cod_color e c_cod_nike al suo posto)
     if profile_name == "On Ballistic":
@@ -511,13 +513,15 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         check_list = [c_art, c_code, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
     if c_cod_color:
         check_list.append(c_cod_color)
+    if c_color:
+        check_list.append(c_color)
     if c_cod_nike:
         check_list.append(c_cod_nike)
-    
+
     for spec in check_list:
         if spec:
             all_specified_cols.extend([p.strip() for p in str(spec).split('+')])
-            
+
     missing_cols = [c for c in all_specified_cols if c not in df.columns]
     if missing_cols:
         raise ValueError(f"Липсващи колони в оригиналния (качения) файл: {', '.join(set(missing_cols))}")
@@ -526,9 +530,10 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     if profile_name == "New Balance Ballistic":
         # Специална логика за New Balance
         result['Cod+Color'] = get_multi_col_data(df, c_art, sep="-")
-        
-        # Reverted: Cod Color takes data from the mapped cod_color column
-        result['Cod Color'] = get_multi_col_data(df, c_cod_color if c_cod_color else c_code)
+
+        # Cod Color: priorità a 'color', poi 'cod_color', poi fallback a 'code'
+        nb_color_source = c_color if c_color else (c_cod_color if c_cod_color else c_code)
+        result['Cod Color'] = get_multi_col_data(df, nb_color_source)
     elif profile_name == "On Ballistic":
         # Cod Color взима данни от колоната мапната към cod_color (по подразбиране 'Color')
         result['Cod Color'] = get_multi_col_data(df, c_cod_color if c_cod_color else c_code)
@@ -714,6 +719,7 @@ with st.sidebar:
         labels_dict = {
             "art_num": "→ Cod+Color (Артикулен номер)",
             "code": "→ Cod.Nike (Код)",
+            "color": "→ Cod Color - Color (Цвят / Nome colore)",
             "size": "→ TAGLIA (Размер)",
             "description": "→ DESCRIZIONE (Описание)",
             "season": "→ STAG. (Сезон)",
@@ -723,7 +729,7 @@ with st.sidebar:
             "division": "→ CATEGORIA (Дивизия)",
             "gender": "→ GENERE (Пол)",
             "silhouette": "→ TIPO (Силует)",
-            "cod_color": "→ Cod Color (Цвят)",
+            "cod_color": "→ Cod Color - Color Code (Код цвят)",
             "cod_nike": "→ Cod.Nike (Специфичен код)"
         }
 
@@ -1119,6 +1125,24 @@ if uploaded_file is not None:
                 type="secondary",
                 use_container_width=True,
             )
+
+        # --- ИМПОРТ ГЕНСОФТ БАРКОД (само за New Balance) ---
+        if profile_name == "New Balance Ballistic":
+            barcode_txt = "\n".join(
+                f"{row['BARCODE']},{row['QTA']}"
+                for _, row in df_output.iterrows()
+            )
+            barcode_txt_filename = f"Import_Gensoft_Barcode_({data}).txt"
+            col_nb1, col_nb2 = st.columns(2)
+            with col_nb1:
+                st.download_button(
+                    label="Импорт Генсофт Баркод",
+                    data=barcode_txt.encode("utf-8"),
+                    file_name=barcode_txt_filename,
+                    mime="text/plain",
+                    type="secondary",
+                    use_container_width=True,
+                )
 
         # Преглед на Packing List
         with st.expander("Преглед на Packing List"):
