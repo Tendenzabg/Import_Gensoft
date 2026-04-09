@@ -1227,23 +1227,22 @@ if uploaded_file is not None:
                 use_container_width=True,
             )
 
-        # --- ИМПОРТ ГЕНСОФТ БАРКОД (само за New Balance) ---
-        if profile_name == "New Balance Ballistic":
-            barcode_txt = "\n".join(
-                f"{row['BARCODE']},{row['QTA']}"
-                for _, row in df_output.iterrows()
+        # --- ИМПОРТ ГЕНСОФТ БАРКОД (tutti i profili) ---
+        barcode_txt = "\n".join(
+            f"{row['BARCODE']},{row['QTA']}"
+            for _, row in df_output.iterrows()
+        )
+        barcode_txt_filename = f"Import_Gensoft_Barcode_({data}).txt"
+        col_nb1, col_nb2 = st.columns(2)
+        with col_nb1:
+            st.download_button(
+                label="Импорт Генсофт Баркод",
+                data=barcode_txt.encode("utf-8"),
+                file_name=barcode_txt_filename,
+                mime="text/plain",
+                type="secondary",
+                use_container_width=True,
             )
-            barcode_txt_filename = f"Import_Gensoft_Barcode_({data}).txt"
-            col_nb1, col_nb2 = st.columns(2)
-            with col_nb1:
-                st.download_button(
-                    label="Импорт Генсофт Баркод",
-                    data=barcode_txt.encode("utf-8"),
-                    file_name=barcode_txt_filename,
-                    mime="text/plain",
-                    type="secondary",
-                    use_container_width=True,
-                )
 
         # Преглед на Packing List
         with st.expander("Преглед на Packing List"):
