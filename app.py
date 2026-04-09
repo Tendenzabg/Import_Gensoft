@@ -69,6 +69,26 @@ PROFILES = {
             "price_multiplier": 1.8
         }
     },
+    "ASICS Ballistic": {
+        "columns": {
+            "art_num": "Стока",
+            "code": "Стока",
+            "size": "Сер.№/Партида",
+            "description": "Код",
+            "season": "season",
+            "barcode": "Баркод",
+            "qta": "Количество",
+            "price_eur": "Ед.цена",
+            "division": "Тарифен код",
+            "gender": "Пол",
+            "silhouette": "Тарифен код",
+            "cod_color": "Стока",
+        },
+        "defaults": {
+            "brand": "ASICS",
+            "price_multiplier": 1.8
+        }
+    },
     "General Ballistic": {
         "columns": {
             "art_num": "Model",
@@ -159,7 +179,13 @@ DIVISION_MAP = {
 # Gender -> GEN.BG
 GENDER_MAP = {
     'MENS': 'Мъже',
+    'MEN': 'Мъже',
+    'Men': 'Мъже',
+    'men': 'Мъже',
     'WOMENS': 'Жени',
+    'WOMEN': 'Жени',
+    'Women': 'Жени',
+    'women': 'Жени',
     'GIRLS': 'Момичета',
     'BOYS': 'Момчета',
     'YOUTH UNISEX': 'Юноши Унисекс',
@@ -167,6 +193,8 @@ GENDER_MAP = {
     'ADULT UNISEX': 'Възрастни Унисекс',
     'CHILD UNISEX': 'Деца унисекс',
     'UNISEX': 'Унисекс',
+    'Unisex': 'Унисекс',
+    'unisex': 'Унисекс',
     'Youth unisex': 'Младежи унисекс',
     'Boys pre school': 'Момчета пред училищна',
     'Boys toddler': 'Момчета малки деца',
@@ -432,6 +460,43 @@ def round_to_price_point(value):
     return best
 
 
+# Tabella conversione taglie US → EUR (scarpe ASICS)
+US_TO_EUR_SIZE = {
+    '3':    '35.5',
+    '3.5':  '35.5',
+    '4':    '36',
+    '4.5':  '37',
+    '5':    '37.5',
+    '5.5':  '38',
+    '6':    '38.5',
+    '6.5':  '39.5',
+    '7':    '40',
+    '7.5':  '40.5',
+    '8':    '41.5',
+    '8.5':  '42',
+    '9':    '42.5',
+    '9.5':  '43.5',
+    '10':   '44',
+    '10.5': '44.5',
+    '11':   '45',
+    '11.5': '46',
+    '12':   '46.5',
+    '12.5': '47',
+    '13':   '47.5',
+    '13.5': '48',
+    '14':   '48.5',
+    '15':   '49.5',
+    '16':   '51',
+}
+
+def convert_us_to_eur_size(val):
+    """Converte taglia US in EUR. Ignora il suffisso di larghezza (es. M, W, D)."""
+    s = str(val).strip()
+    # Rimuove suffissi di larghezza: lettere alla fine (es. "10M" → "10", "8.5W" → "8.5")
+    numeric = s.rstrip('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz').strip()
+    return US_TO_EUR_SIZE.get(numeric, s)
+
+
 def get_cat3_value(cat1, tipo_bg):
     """Генерира Категория_3 с правилна граматическа форма."""
     if pd.isna(cat1) or pd.isna(tipo_bg):
@@ -477,7 +542,7 @@ def get_multi_col_data(df, col_spec, sep=" "):
     return combined
 
 
-def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE", profile_name="", size_map=None):
+def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE", profile_name="", size_map=None, season_override=""):
     """Обработва DataFrame с всички 24 трансформации."""
 
     if tipo_map is None:
@@ -510,7 +575,9 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     if profile_name == "On Ballistic":
         check_list = [c_art, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
     else:
-        check_list = [c_art, c_code, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
+        # c_stag è opzionale: incluso solo se la colonna esiste nel file (può essere inserita manualmente)
+        base = [c_art, c_code, c_size, c_desc, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
+        check_list = base + ([c_stag] if c_stag and c_stag in df.columns else [])
     if c_cod_color:
         check_list.append(c_cod_color)
     if c_color:
@@ -539,6 +606,12 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         result['Cod Color'] = get_multi_col_data(df, c_cod_color if c_cod_color else c_code)
         # Cod+Color = Vendor Item No. (c_cod_nike) + '-' + Color (c_cod_color)
         result['Cod+Color'] = get_multi_col_data(df, c_cod_nike).astype(str) + '-' + result['Cod Color'].astype(str)
+    elif profile_name == "ASICS Ballistic":
+        # Cod+Color = Стока con ".." sostituito da "-" (es. "1203A383-113")
+        result['Cod+Color'] = get_multi_col_data(df, c_art).astype(str).str.replace('..', '-', regex=False)
+        # Cod Color = parte dopo ".." (es. "113")
+        cod_color_src = c_cod_color if c_cod_color else c_art
+        result['Cod Color'] = get_multi_col_data(df, cod_color_src).astype(str).str.split('..', n=1, regex=False).str[-1]
     else:
         # Стандартна логика за Nike и други
         result['Cod+Color'] = get_multi_col_data(df, c_art, sep=" ")
@@ -548,18 +621,28 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
 
     if profile_name == "On Ballistic":
         result['Cod.Nike'] = get_multi_col_data(df, c_cod_nike if c_cod_nike else 'Vendor Item No.')
+    elif profile_name == "ASICS Ballistic":
+        # Cod.Nike = parte prima di ".." in Стока (es. "1203A383..113" → "1203A383")
+        result['Cod.Nike'] = get_multi_col_data(df, c_code).astype(str).str.split('..', n=1, regex=False).str[0]
     else:
         result['Cod.Nike'] = get_multi_col_data(df, c_code)
-    result['TAGLIA'] = get_multi_col_data(df, c_size)
+    taglia_raw = get_multi_col_data(df, c_size)
+    if profile_name == "ASICS Ballistic":
+        result['TAGLIA'] = taglia_raw.astype(str).apply(convert_us_to_eur_size)
+    else:
+        result['TAGLIA'] = taglia_raw
 
-    if profile_name in ["New Balance Ballistic", "On Ballistic"]:
+    if profile_name in ["New Balance Ballistic", "On Ballistic", "ASICS Ballistic"]:
         result['SKU Completo'] = result['Cod+Color'].astype(str) + '-' + result['TAGLIA'].astype(str)
     else:
         # За Nike използваме оригиналния арт. номер без промяна на сепаратора за SKU
         art_orig = get_multi_col_data(df, c_art, sep="") 
         result['SKU Completo'] = art_orig.astype(str) + '-' + result['TAGLIA'].astype(str)
     result['DESCRIZIONE'] = get_multi_col_data(df, c_desc)
-    result['STAG.'] = get_multi_col_data(df, c_stag)
+    if c_stag and c_stag in df.columns:
+        result['STAG.'] = get_multi_col_data(df, c_stag)
+    else:
+        result['STAG.'] = season_override
     # Гарантираме, че BARCODE се чете като чист низ (без .0 ако е число)
     bar_raw = get_multi_col_data(df, c_bar)
     result['BARCODE'] = bar_raw.astype(str).str.replace(r'\.0$', '', regex=True)
@@ -570,10 +653,17 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     
     # За цената не поддържаме конкатенация, взимаме първата посочена колона
     price_col = [p.strip() for p in str(c_price).split('+')][0]
-    result['FPC Price w/o VAT in EUR'] = df[price_col].round(2)
+    price_raw = df[price_col]
+    # Normalizza: sostituisce virgola con punto e converte in float (es. "61,5" → 61.5)
+    if price_raw.dtype == object:
+        price_raw = pd.to_numeric(
+            price_raw.astype(str).str.replace(',', '.', regex=False),
+            errors='coerce'
+        ).fillna(0.0)
+    result['FPC Price w/o VAT in EUR'] = price_raw.round(2)
 
     # 11: PRZ DETT
-    result['PRZ DETT'] = (df[price_col] * price_multiplier).round(2)
+    result['PRZ DETT'] = (price_raw * price_multiplier).round(2)
 
     # 12: PREZZO NEGOZIO
     result['PREZZO NEGOZIO'] = result['PRZ DETT'].apply(round_to_price_point)
@@ -775,6 +865,13 @@ with st.sidebar:
         help="Име на марката за колона BRAND"
     )
 
+    season_manual = st.text_input(
+        "Сезон (ако няма колона в файла)",
+        value="",
+        placeholder="Напр. SS25, FW24...",
+        help="Използва се за колона STAG. ако файлът не съдържа колона за сезон"
+    )
+
     warehouse_name = st.text_input(
         "Склад (за Import Gensoft)",
         value="",
@@ -861,6 +958,9 @@ if uploaded_file is not None:
     for k, val in col_map.items():
         if k in excluded_keys:
             continue
+        # 'season' è sempre opzionale: se non esiste nel file si usa il valore manuale
+        if k == 'season':
+            continue
         if val:
             all_mapped_cols.extend([p.strip() for p in str(val).split('+')])
     missing_cols = [c for c in set(all_mapped_cols) if c not in df_input.columns]
@@ -889,6 +989,7 @@ if uploaded_file is not None:
                     brand=brand_name,
                     profile_name=profile_name,
                     size_map=size_table_map,
+                    season_override=season_manual,
                 )
                 st.session_state['df_output'] = df_output
                 st.session_state['elaborated'] = True
