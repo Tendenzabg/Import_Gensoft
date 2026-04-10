@@ -89,6 +89,26 @@ PROFILES = {
             "price_multiplier": 1.8
         }
     },
+    "SPRAYGROUND Ballistic": {
+        "columns": {
+            "art_num": "CODE",
+            "code": "CODE",
+            "size": "Size",
+            "description": "ARTICLE",
+            "season": "season",
+            "barcode": "UPC NUMBER",
+            "qta": "Qty",
+            "price_eur": "SELL IN",
+            "division": "Categoria",
+            "gender": "Genere",
+            "silhouette": "Tipo",
+            "cod_color": "Color",
+        },
+        "defaults": {
+            "brand": "SPRAYGROUND",
+            "price_multiplier": 2.0
+        }
+    },
     "General Ballistic": {
         "columns": {
             "art_num": "Model",
@@ -612,6 +632,14 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         # Cod Color = parte dopo ".." (es. "113")
         cod_color_src = c_cod_color if c_cod_color else c_art
         result['Cod Color'] = get_multi_col_data(df, cod_color_src).astype(str).str.split('..', n=1, regex=False).str[-1]
+    elif profile_name == "SPRAYGROUND Ballistic":
+        # Cod+Color = colonna "Code+Color" letta direttamente (il + è parte del nome colonna)
+        if 'Code+Color' in df.columns:
+            result['Cod+Color'] = df['Code+Color'].astype(str)
+        else:
+            result['Cod+Color'] = get_multi_col_data(df, c_art).astype(str)
+        # Cod Color = colonna Color
+        result['Cod Color'] = get_multi_col_data(df, c_cod_color).astype(str) if c_cod_color else pd.Series([''] * len(df))
     else:
         # Стандартна логика за Nike и други
         result['Cod+Color'] = get_multi_col_data(df, c_art, sep=" ")
@@ -632,7 +660,7 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     else:
         result['TAGLIA'] = taglia_raw
 
-    if profile_name in ["New Balance Ballistic", "On Ballistic", "ASICS Ballistic"]:
+    if profile_name in ["New Balance Ballistic", "On Ballistic", "ASICS Ballistic", "SPRAYGROUND Ballistic"]:
         result['SKU Completo'] = result['Cod+Color'].astype(str) + '-' + result['TAGLIA'].astype(str)
     else:
         # За Nike използваме оригиналния арт. номер без промяна на сепаратора за SKU
@@ -666,7 +694,16 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     result['PRZ DETT'] = (price_raw * price_multiplier).round(2)
 
     # 12: PREZZO NEGOZIO
-    result['PREZZO NEGOZIO'] = result['PRZ DETT'].apply(round_to_price_point)
+    if profile_name == "SPRAYGROUND Ballistic" and 'SUGGESTED SELL OUT' in df.columns:
+        sell_out_raw = df['SUGGESTED SELL OUT']
+        if sell_out_raw.dtype == object:
+            sell_out_raw = pd.to_numeric(
+                sell_out_raw.astype(str).str.replace(',', '.', regex=False),
+                errors='coerce'
+            ).fillna(0.0)
+        result['PREZZO NEGOZIO'] = sell_out_raw.round(2)
+    else:
+        result['PREZZO NEGOZIO'] = result['PRZ DETT'].apply(round_to_price_point)
 
     # 13: BRAND
     result['BRAND'] = brand
