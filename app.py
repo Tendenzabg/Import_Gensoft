@@ -346,7 +346,7 @@ TIPO_MAP = {
     'G NP DF TANK': 'Потник',
 }
 
-# Търговски ценови точки
+# Punti di prezzo commerciali
 PRICE_POINTS = [
     5, 9, 15, 19, 25, 29, 35, 39, 45, 49,
     55, 59, 65, 69, 75, 79, 85, 89, 95, 99,
@@ -355,16 +355,12 @@ PRICE_POINTS = [
     209, 219, 229, 239, 249, 259, 269, 279, 289, 299,
 ]
 
-# Граматически правила за български за Категория_3
-#   - Мъжки род (м.р.): Мъжки/Дамски/Детски (суитшърт, панталон, клин, екип, елек, потник)
-#   - Женски род (ж.р.): Мъжка/Дамска/Детска (тениска, риза, чанта, раница, жилетка, шапка)
-#   - Среден род (ср.р.): Мъжко/Дамско/Детско (яке, бюстие, боди)
-#   - Множествено число (мн.ч.): Мъжки/Дамски/Детски (маратонки, кецове, чорапи, боксерки, сандали)
-
+# Regole grammaticali per la lingua bulgara
 FEMININE_WORDS = {'тениска', 'риза', 'чанта', 'раница', 'жилетка', 'шапка'}
 NEUTER_WORDS = {'яке', 'бюстие', 'боди'}
 PLURAL_WORDS = {'маратонки', 'кецове', 'чорапи', 'боксерки', 'сандали', 'предпазни кори'}
 
+# Prefissi di genere per il bulgaro
 GENDER_PREFIXES = {
     'Мъже': {'m': 'Мъжки', 'f': 'Мъжка', 'n': 'Мъжко', 'pl': 'Мъжки'},
     'Жени': {'m': 'Дамски', 'f': 'Дамска', 'n': 'Дамско', 'pl': 'Дамски'},
@@ -375,9 +371,23 @@ GENDER_PREFIXES = {
 }
 
 
-# ============================================================
-# ФУНКЦИИ
-# ============================================================
+def scrivi_log(messaggio):
+    """Scrive un messaggio di errore nel file di log 'output/log.txt'.
+    Crea la cartella 'output' se non esiste già.
+    """
+    try:
+        # Crea la cartella 'output' se non esiste nel percorso corrente
+        os.makedirs("output", exist_ok=True)
+        # Ottiene la data e l'ora corrente nel formato standard
+        ora_corrente = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Apre il file log.txt in modalità 'append' per aggiungere testo in coda
+        with open("output/log.txt", "a", encoding="utf-8") as file_log:
+            # Scrive l'errore registrando il momento esatto in cui è avvenuto
+            file_log.write(f"[{ora_corrente}] {messaggio}\n")
+    except Exception as errore:
+        # In caso di errore nella scrittura del log, lo stampa sulla console di Streamlit
+        print(f"Impossibile scrivere il log: {errore}")
+
 
 def load_tipo_dictionary(uploaded_file):
     """Зарежда речник TIPO от Excel файл с лист Traduzioni.
@@ -386,30 +396,47 @@ def load_tipo_dictionary(uploaded_file):
     - SOFIA формат: 13+ колони (ARTICOLI, ..., колона 12 = опростен български)
     """
     try:
+        # Carica il file Excel usando la libreria pandas
         df_trad = pd.read_excel(uploaded_file, sheet_name='Traduzioni')
+        # Inizializza un dizionario vuoto per salvare le traduzioni trovate
         mapping = {}
+        # Salva il numero totale delle colonne nel foglio di calcolo
         num_cols = len(df_trad.columns)
 
+        # Itera su ogni riga della tabella caricata
         for _, row in df_trad.iterrows():
-            eng = row.iloc[0]  # Първа колона = английски
+            # Legge il valore della prima colonna come termine inglese
+            eng = row.iloc[0]
 
+            # Controlla se le colonne sono 13 o più (formato SOFIA)
             if num_cols >= 13:
-                # SOFIA формат: използва колона 12 (опростен български)
+                # Estrae il termine in bulgaro semplificato dalla colonna indice 12
                 bg = row.iloc[12]
+            # Se le colonne sono meno di 13 ma almeno 3 (formato semplificato)
             elif num_cols >= 3:
-                # Опростен формат: използва последната колона (Bulgaro)
+                # Prende il valore dall'ultima colonna della riga corrente
                 bg = row.iloc[num_cols - 1]
+            # In tutti gli altri casi passa direttamente al ciclo successivo
             else:
                 continue
 
+            # Verifica che entrambi i valori non siano vuoti o nulli
             if pd.notna(eng) and pd.notna(bg) and str(eng).strip() and str(bg).strip():
+                # Rimuove eventuali spazi vuoti all'inizio o alla fine del termine inglese
                 eng_str = str(eng).strip()
+                # Rimuove eventuali spazi vuoti all'inizio o alla fine del termine bulgaro
                 bg_str = str(bg).strip()
+                # Esclude le righe di intestazione standard o i valori non validi (pari a '0')
                 if eng_str not in ('INGLESE', 'ARTICOLI', 'Inglese') and bg_str != '0':
+                    # Aggiunge la traduzione corretta al dizionario di corrispondenza
                     mapping[eng_str] = bg_str
 
+        # Restituisce il dizionario se contiene elementi, altrimenti ritorna None
         return mapping if mapping else None
-    except Exception:
+    except Exception as errore:
+        # Registra l'errore avvenuto nel file di log per il tracciamento delle anomalie
+        scrivi_log(f"Errore nel caricamento del dizionario dei tipi: {errore}")
+        # Ritorna None in caso di eccezione per non bloccare il caricamento dell'app
         return None
 
 
@@ -419,58 +446,79 @@ def load_size_table(uploaded_file):
     Очаквани колони: 'brand', 'div', 'style', 'size_table'.
     """
     try:
+        # Inizializza l'oggetto ExcelFile per esplorare le caratteristiche del documento Excel
         excel_file = pd.ExcelFile(uploaded_file)
+        # Sceglie il foglio specifico 'Size_table' se esiste, altrimenti usa il primo foglio utile
         sheet_name = 'Size_table' if 'Size_table' in excel_file.sheet_names else excel_file.sheet_names[0]
         
-        df_size = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+        # Estrae i dati dal foglio selezionato senza consumare lo stream del file caricato
+        df_size = excel_file.parse(sheet_name)
+        # Prepara un dizionario vuoto per memorizzare le relazioni delle taglie
         mapping = {}
         
-        # Нормализираме имената на колоните
+        # Trasforma i nomi di tutte le colonne in lettere minuscole e ne rimuove gli spazi
         cols_lower = {str(c).lower().strip(): c for c in df_size.columns}
         
-        # Разширено търсене на колони (поддържа и БГ имена)
+        # Cerca la colonna del brand (supportando anche le versioni scritte in caratteri cirillici)
         brand_col = cols_lower.get('brand') or cols_lower.get('бранд')
+        # Cerca la colonna della divisione commerciale (es: APP, FTW, Categoria, ecc.)
         div_col = cols_lower.get('categoria') or cols_lower.get('div') or cols_lower.get('дивизия') or cols_lower.get('divisiya')
+        # Identifica la colonna con lo stile (corrispondente al Genere/Gender originale del prodotto)
         style_col = cols_lower.get('genere') or cols_lower.get('style') or cols_lower.get('стил') or cols_lower.get('stil')
+        # Identifica la colonna del codice finale della tabella delle taglie
         code_col = cols_lower.get('size_table') or cols_lower.get('код') or cols_lower.get('size code')
         
+        # Se non si trovano le intestazioni corrette per le colonne necessarie, usa la posizione
         if not (brand_col and style_col and code_col):
+            # Procede solo se sono presenti almeno 3 colonne totali nella tabella
             if len(df_size.columns) >= 3:
-                # Fallback към индекси ако не намерим имена
+                # Imposta la prima colonna (indice 0) per il Brand del prodotto
                 brand_col = df_size.columns[0]
-                # Ако има 4 колони, приемаме че втората е DIV
+                # Se sono presenti 4 colonne, assegna le posizioni per tutte le variabili
                 if len(df_size.columns) >= 4:
                     div_col = df_size.columns[1]
                     style_col = df_size.columns[2]
                     code_col = df_size.columns[3]
+                # Se ci sono solo 3 colonne, esclude la colonna della divisione (impostandola a None)
                 else:
                     div_col = None
                     style_col = df_size.columns[1]
                     code_col = df_size.columns[2]
+            # Se la tabella ha una struttura non idonea con meno di 3 colonne, ritorna None
             else:
                 return None
         
+        # Cicla riga per riga su tutti gli elementi del DataFrame caricato
         for _, row in df_size.iterrows():
+            # Estrae la marca normalizzandola (spazi rimossi e lettere tutte maiuscole)
             b_val = str(row[brand_col]).strip().upper() if pd.notna(row[brand_col]) else ""
+            # Estrae la divisione commerciale (es. APP o FTW) normalizzandola in maiuscolo
             d_val = str(row[div_col]).strip().upper() if div_col and pd.notna(row[div_col]) else ""
+            # Estrae lo stile del genere del prodotto in maiuscolo (es. WOMENS, MENS, ecc.)
             s_val = str(row[style_col]).strip().upper() if pd.notna(row[style_col]) else ""
+            # Estrae il codice corrispondente della tabella taglie (es. WANIKE, USNIKE)
             c_val = str(row[code_col]).strip() if pd.notna(row[code_col]) else ""
             
-            # Почистване на "NAN" низове
+            # Filtra ed elimina le stringhe nule derivanti da celle vuote rappresentate come 'NAN'
             if b_val == "NAN": b_val = ""
             if d_val == "NAN": d_val = ""
             if s_val == "NAN": s_val = ""
             if c_val == "NAN": c_val = ""
             
+            # Se i campi marca, stile e codice sono popolati correttamente, registra la taglia
             if b_val and s_val and c_val and b_val != 'BRAND':
-                # Ключ 1: С дивизия
+                # Registra la chiave principale che comprende la divisione commerciale
                 mapping[(b_val, d_val, s_val)] = c_val
-                # Ключ 2: Без дивизия (като fallback)
+                # Se esiste una divisione, registra una chiave di fallback con divisione vuota
                 if d_val:
                     mapping[(b_val, "", s_val)] = c_val
                     
+        # Restituisce il dizionario creato solo se contiene dati, altrimenti ritorna None
         return mapping if mapping else None
-    except Exception:
+    except Exception as errore:
+        # Invia l'errore rilevato al file di log centralizzato dell'applicazione
+        scrivi_log(f"Errore nel caricamento della tabella delle taglie: {errore}")
+        # Restituisce None per far proseguire l'esecuzione dell'app senza crash improvvisi
         return None
 
 
@@ -945,23 +993,47 @@ with st.sidebar:
             st.warning("Не може да се прочете речникът. Използва се вграденият речник.")
 
     st.subheader("Таблица с размери")
+    # Crea l'uploader per il file delle taglie nella barra laterale
     size_file = st.file_uploader(
         "Качете Size Table (по избор)",
         type=['xlsx'],
-        help="Excel файл с лист 'Size_table' за мапинг на Код таблицаразмери."
+        help="Excel файл с лист 'Size_table' за мапинг на Код таблицаразмери. Ако не е качен, се използва файлът по подразбиране 'File sorgenti/Size_table.xlsx'."
     )
 
+    # Inizializza la mappa delle taglie come None
     size_table_map = None
+    # Controlla se l'utente ha inserito un file personalizzato
     if size_file is not None:
+        # Carica il file inserito dall'utente usando la funzione load_size_table
         size_table_map = load_size_table(size_file)
+        # Se il caricamento ha successo, mostra il messaggio di conferma
         if size_table_map:
             st.success(f"Таблицата за размери е заредена: {len(size_table_map)} записа")
+            # Mostra una finestra espandibile di debug per verificare le chiavi trovate
             with st.sidebar.expander("🔍 Дебъг: Преглед на Size Table", expanded=False):
                 st.write("Първите 10 записа (Brand, Div, Style) -> Code:")
                 for k, v in list(size_table_map.items())[:10]:
                     st.code(f"{k} -> {v}")
+        # In caso di errore nel caricamento, mostra un avviso a video
         else:
             st.warning("Не може да се прочете таблицата за размери.")
+    # Se non è stato inserito alcun file personalizzato
+    else:
+        # Percorso predefinito del file Excel con le taglie all'interno del progetto
+        percorso_default = "File sorgenti/Size_table.xlsx"
+        # Controlla se il file di default esiste nel percorso indicato
+        if os.path.exists(percorso_default):
+            # Carica la tabella taglie dal percorso predefinito
+            size_table_map = load_size_table(percorso_default)
+            # Se la tabella viene letta correttamente
+            if size_table_map:
+                # Mostra un messaggio informativo indicando che è stata caricata automaticamente
+                st.info(f"💡 Автоматично заредена таблица за размери по подразбиране ({len(size_table_map)} записа)")
+                # Aggiunge il box espandibile di debug anche per la tabella predefinita
+                with st.sidebar.expander("🔍 Дебъг: Преглед на Size Table (по подразбиране)", expanded=False):
+                    st.write("Първите 10 записа (Brand, Div, Style) -> Code:")
+                    for k, v in list(size_table_map.items())[:10]:
+                        st.code(f"{k} -> {v}")
 
     st.divider()
     st.caption(f"v1.1 - Профил: {profile_name}")
