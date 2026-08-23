@@ -71,18 +71,18 @@ PROFILES = {
     },
     "ASICS Ballistic": {
         "columns": {
-            "art_num": "Стока",
-            "code": "Стока",
+            "art_num": "Код",
+            "code": "Код",
             "size": "Сер.№/Партида",
-            "description": "Код",
+            "description": "Стока",
             "season": "season",
             "barcode": "Баркод",
             "qta": "Количество",
             "price_eur": "Ед.цена",
-            "division": "Тарифен код",
+            "division": "Категория",
             "gender": "Пол",
-            "silhouette": "Тарифен код",
-            "cod_color": "Стока",
+            "silhouette": "Тип",
+            "cod_color": "Код",
         },
         "defaults": {
             "brand": "ASICS",
@@ -571,6 +571,23 @@ def convert_us_to_eur_size(val):
     return US_TO_EUR_SIZE.get(numeric, s)
 
 
+def converti_in_stringhe(serie):
+    """Converte una serie di pandas in stringhe pulite.
+    Gestisce i valori mancanti (NaN, None, pd.NA) convertendoli in stringhe vuote.
+    
+    Parametri:
+    serie (pd.Series): La serie di input da convertire.
+    
+    Restituisce:
+    pd.Series: La serie convertita in stringhe senza valori nulli o 'nan'/'<NA>'.
+    """
+    # Sostituisce i valori nulli con una stringa vuota ed esegue il cast a stringa
+    serie_pulita = serie.fillna('').astype(str)
+    # Rimuove le rappresentazioni testuali di valori nulli
+    return serie_pulita.replace({'<NA>': '', 'nan': '', 'None': ''})
+
+
+
 def get_cat3_value(cat1, tipo_bg):
     """Генерира Категория_3 с правилна граматическа форма."""
     if pd.isna(cat1) or pd.isna(tipo_bg):
@@ -682,10 +699,10 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         result['Cod+Color'] = get_multi_col_data(df, c_cod_nike).astype(str) + '-' + result['Cod Color'].astype(str)
     elif profile_name == "ASICS Ballistic":
         # Cod+Color = Стока con ".." sostituito da "-" (es. "1203A383-113")
-        result['Cod+Color'] = get_multi_col_data(df, c_art).astype(str).str.replace('..', '-', regex=False)
+        result['Cod+Color'] = converti_in_stringhe(get_multi_col_data(df, c_art)).str.replace('..', '-', regex=False)
         # Cod Color = parte dopo ".." (es. "113")
         cod_color_src = c_cod_color if c_cod_color else c_art
-        result['Cod Color'] = get_multi_col_data(df, cod_color_src).astype(str).str.split('..', n=1, regex=False).str[-1]
+        result['Cod Color'] = converti_in_stringhe(get_multi_col_data(df, cod_color_src)).str.split('..', n=1, regex=False).str[-1]
     elif profile_name == "SPRAYGROUND Ballistic":
         # Cod+Color = colonna "Code+Color" letta direttamente (il + è parte del nome colonna)
         if 'Code+Color' in df.columns:
@@ -705,21 +722,21 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         result['Cod.Nike'] = get_multi_col_data(df, c_cod_nike if c_cod_nike else 'Vendor Item No.')
     elif profile_name == "ASICS Ballistic":
         # Cod.Nike = parte prima di ".." in Стока (es. "1203A383..113" → "1203A383")
-        result['Cod.Nike'] = get_multi_col_data(df, c_code).astype(str).str.split('..', n=1, regex=False).str[0]
+        result['Cod.Nike'] = converti_in_stringhe(get_multi_col_data(df, c_code)).str.split('..', n=1, regex=False).str[0]
     else:
         result['Cod.Nike'] = get_multi_col_data(df, c_code)
     taglia_raw = get_multi_col_data(df, c_size)
     if profile_name == "ASICS Ballistic":
-        result['TAGLIA'] = taglia_raw.astype(str).apply(convert_us_to_eur_size)
+        result['TAGLIA'] = converti_in_stringhe(taglia_raw).apply(convert_us_to_eur_size)
     else:
         result['TAGLIA'] = taglia_raw
 
     if profile_name in ["New Balance Ballistic", "On Ballistic", "ASICS Ballistic", "SPRAYGROUND Ballistic"]:
-        result['SKU Completo'] = result['Cod+Color'].astype(str) + '-' + result['TAGLIA'].astype(str)
+        result['SKU Completo'] = converti_in_stringhe(result['Cod+Color']) + '-' + converti_in_stringhe(result['TAGLIA'])
     else:
         # За Nike използваме оригиналния арт. номер без промяна на сепаратора за SKU
         art_orig = get_multi_col_data(df, c_art, sep="") 
-        result['SKU Completo'] = art_orig.astype(str) + '-' + result['TAGLIA'].astype(str)
+        result['SKU Completo'] = converti_in_stringhe(art_orig) + '-' + converti_in_stringhe(result['TAGLIA'])
     result['DESCRIZIONE'] = get_multi_col_data(df, c_desc)
     if c_stag and c_stag in df.columns:
         result['STAG.'] = get_multi_col_data(df, c_stag)
