@@ -74,18 +74,18 @@
         "__price_multiplier__": 2.0
     },
     "ASICS Ballistic": {
-        "art_num": "Код",
-        "code": "Код",
+        "art_num": "Code+color",
+        "code": "Стока",
         "size": "Сер.№/Партида",
-        "description": "Стока",
-        "season": "season",
+        "description": "Код",
+        "season": "Season",
         "barcode": "Баркод",
         "qta": "Количество",
         "price_eur": "Ед.цена",
         "division": "Категория",
         "gender": "Пол",
         "silhouette": "Тип",
-        "cod_color": "Код",
+        "cod_color": "Цвят",
         "__price_multiplier__": 2.0
     }
 }

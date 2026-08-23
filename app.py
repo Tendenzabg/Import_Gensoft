@@ -71,18 +71,18 @@ PROFILES = {
     },
     "ASICS Ballistic": {
         "columns": {
-            "art_num": "Код",
-            "code": "Код",
+            "art_num": "Code+color",
+            "code": "Стока",
             "size": "Сер.№/Партида",
-            "description": "Стока",
-            "season": "season",
+            "description": "Код",
+            "season": "Season",
             "barcode": "Баркод",
             "qta": "Количество",
             "price_eur": "Ед.цена",
             "division": "Категория",
             "gender": "Пол",
             "silhouette": "Тип",
-            "cod_color": "Код",
+            "cod_color": "Цвят",
         },
         "defaults": {
             "brand": "ASICS",
@@ -615,7 +615,13 @@ def get_multi_col_data(df, col_spec, sep=" "):
     if not col_spec:
         return pd.Series([""] * len(df))
     
-    parts = [p.strip() for p in str(col_spec).split('+')]
+    # Se il nome della colonna esiste direttamente nel DataFrame (es: "Code+color"),
+    # lo utilizziamo direttamente senza dividere per il carattere '+'
+    col_str = str(col_spec)
+    if col_str in df.columns:
+        return df[col_str]
+    
+    parts = [p.strip() for p in col_str.split('+')]
     valid_parts = [p for p in parts if p in df.columns]
     
     if not valid_parts:
@@ -666,25 +672,24 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     # Per ASICS Ballistic, code e cod_color derivano dalla stessa colonna di art_num - non vanno validati separatamente
     if profile_name == "On Ballistic":
         check_list = [c_art, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
-    elif profile_name == "ASICS Ballistic":
-        # code e cod_color derivano da 'Код' (stesso di art_num) - non servono come colonne separate
-        base = [c_art, c_size, c_desc, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
-        check_list = base + ([c_stag] if c_stag and c_stag in df.columns else [])
     else:
         # c_stag è opzionale: incluso solo se la colonna esiste nel file (può essere inserita manualmente)
         base = [c_art, c_code, c_size, c_desc, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
         check_list = base + ([c_stag] if c_stag and c_stag in df.columns else [])
-    # c_color e c_cod_color sono opzionali per ASICS (derivano da c_art)
-    if c_color and profile_name != "ASICS Ballistic":
-        check_list.append(c_color)
-    if c_cod_color and profile_name != "ASICS Ballistic":
+    if c_cod_color:
         check_list.append(c_cod_color)
+    if c_color:
+        check_list.append(c_color)
     if c_cod_nike:
         check_list.append(c_cod_nike)
 
     for spec in check_list:
         if spec:
-            all_specified_cols.extend([p.strip() for p in str(spec).split('+')])
+            spec_str = str(spec)
+            if spec_str in df.columns:
+                all_specified_cols.append(spec_str)
+            else:
+                all_specified_cols.extend([p.strip() for p in spec_str.split('+')])
 
     missing_cols = [c for c in all_specified_cols if c not in df.columns]
     if missing_cols:
@@ -704,11 +709,11 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         # Cod+Color = Vendor Item No. (c_cod_nike) + '-' + Color (c_cod_color)
         result['Cod+Color'] = get_multi_col_data(df, c_cod_nike).astype(str) + '-' + result['Cod Color'].astype(str)
     elif profile_name == "ASICS Ballistic":
-        # Cod+Color = Стока con ".." sostituito da "-" (es. "1203A383-113")
-        result['Cod+Color'] = converti_in_stringhe(get_multi_col_data(df, c_art)).str.replace('..', '-', regex=False)
-        # Cod Color = parte dopo ".." (es. "113")
+        # Cod+Color = Code+color colonna letta direttamente
+        result['Cod+Color'] = converti_in_stringhe(get_multi_col_data(df, c_art))
+        # Cod Color = colonna Цвят letta direttamente
         cod_color_src = c_cod_color if c_cod_color else c_art
-        result['Cod Color'] = converti_in_stringhe(get_multi_col_data(df, cod_color_src)).str.split('..', n=1, regex=False).str[-1]
+        result['Cod Color'] = converti_in_stringhe(get_multi_col_data(df, cod_color_src))
     elif profile_name == "SPRAYGROUND Ballistic":
         # Cod+Color = colonna "Code+Color" letta direttamente (il + è parte del nome colonna)
         if 'Code+Color' in df.columns:
@@ -727,8 +732,8 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     if profile_name == "On Ballistic":
         result['Cod.Nike'] = get_multi_col_data(df, c_cod_nike if c_cod_nike else 'Vendor Item No.')
     elif profile_name == "ASICS Ballistic":
-        # Cod.Nike = parte prima di ".." in Стока (es. "1203A383..113" → "1203A383")
-        result['Cod.Nike'] = converti_in_stringhe(get_multi_col_data(df, c_code)).str.split('..', n=1, regex=False).str[0]
+        # Cod.Nike = Стока colonna letta direttamente
+        result['Cod.Nike'] = converti_in_stringhe(get_multi_col_data(df, c_code))
     else:
         result['Cod.Nike'] = get_multi_col_data(df, c_code)
     taglia_raw = get_multi_col_data(df, c_size)
@@ -1093,9 +1098,6 @@ if uploaded_file is not None:
     excluded_keys = set()
     if profile_name == "On Ballistic":
         excluded_keys = {'code'}  # 'code' non usato in On Ballistic
-    elif profile_name == "ASICS Ballistic":
-        # 'code', 'cod_color' e 'color' non sono colonne separate in ASICS - derivano dalla colonna 'Код'
-        excluded_keys = {'code', 'cod_color', 'color'}
     for k, val in col_map.items():
         if k in excluded_keys:
             continue
@@ -1103,7 +1105,11 @@ if uploaded_file is not None:
         if k == 'season':
             continue
         if val:
-            all_mapped_cols.extend([p.strip() for p in str(val).split('+')])
+            val_str = str(val)
+            if val_str in df_input.columns:
+                all_mapped_cols.append(val_str)
+            else:
+                all_mapped_cols.extend([p.strip() for p in val_str.split('+')])
     missing_cols = [c for c in set(all_mapped_cols) if c not in df_input.columns]
 
     if missing_cols:
