@@ -83,6 +83,7 @@ PROFILES = {
             "gender": "Пол",
             "silhouette": "Тип",
             "cod_color": "Цвят",
+            "rrp": "RRP",
         },
         "defaults": {
             "brand": "ASICS",
@@ -665,6 +666,7 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     c_cod_color = col_map.get('cod_color', '')
     c_color = col_map.get('color', '')
     c_cod_nike = col_map.get('cod_nike', '')
+    c_rrp = col_map.get('rrp', '')
 
     # Proверка за наличие на колони (включително мулти-колони)
     all_specified_cols = []
@@ -682,6 +684,8 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
         check_list.append(c_color)
     if c_cod_nike:
         check_list.append(c_cod_nike)
+    if c_rrp:
+        check_list.append(c_rrp)
 
     for spec in check_list:
         if spec:
@@ -784,6 +788,14 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
                 errors='coerce'
             ).fillna(0.0)
         result['PREZZO NEGOZIO'] = sell_out_raw.round(2)
+    elif profile_name == "ASICS Ballistic" and c_rrp and c_rrp in df.columns:
+        rrp_raw = df[c_rrp]
+        if rrp_raw.dtype == object:
+            rrp_raw = pd.to_numeric(
+                rrp_raw.astype(str).str.replace(',', '.', regex=False),
+                errors='coerce'
+            ).fillna(0.0)
+        result['PREZZO NEGOZIO'] = rrp_raw.round(2)
     else:
         result['PREZZO NEGOZIO'] = result['PRZ DETT'].apply(round_to_price_point)
 

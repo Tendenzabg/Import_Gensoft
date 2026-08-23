@@ -86,6 +86,7 @@
         "gender": "Пол",
         "silhouette": "Тип",
         "cod_color": "Цвят",
+        "rrp": "RRP",
         "__price_multiplier__": 2.0
     }
 }
