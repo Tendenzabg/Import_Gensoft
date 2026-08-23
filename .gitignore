@@ -1,0 +1,31 @@
+# Cache e file temporanei Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# File di ambiente (credenziali)
+.env
+.env.*
+
+# File di sistema macOS
+.DS_Store
+
+# Cartella output (generata automaticamente)
+output/
+
+# File temporanei Excel
+~$*.xlsx
+~$*.xls
+
+# File di log
+*.log
+
+# File di test locali temporanei
+test_asics_profile.py
+repro_*.py
+
+# IDE
+.vscode/
+.idea/
+.claude/
