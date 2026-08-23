@@ -663,16 +663,22 @@ def process_file(df, col_map, price_multiplier=1.8, tipo_map=None, brand="NIKE",
     # Proверка за наличие на колони (включително мулти-колони)
     all_specified_cols = []
     # Per On Ballistic, c_code non viene usato (si usano c_cod_color e c_cod_nike al suo posto)
+    # Per ASICS Ballistic, code e cod_color derivano dalla stessa colonna di art_num - non vanno validati separatamente
     if profile_name == "On Ballistic":
         check_list = [c_art, c_size, c_desc, c_stag, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
+    elif profile_name == "ASICS Ballistic":
+        # code e cod_color derivano da 'Код' (stesso di art_num) - non servono come colonne separate
+        base = [c_art, c_size, c_desc, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
+        check_list = base + ([c_stag] if c_stag and c_stag in df.columns else [])
     else:
         # c_stag è opzionale: incluso solo se la colonna esiste nel file (può essere inserita manualmente)
         base = [c_art, c_code, c_size, c_desc, c_bar, c_qta, c_price, c_div, c_gen, c_tipo]
         check_list = base + ([c_stag] if c_stag and c_stag in df.columns else [])
-    if c_cod_color:
-        check_list.append(c_cod_color)
-    if c_color:
+    # c_color e c_cod_color sono opzionali per ASICS (derivano da c_art)
+    if c_color and profile_name != "ASICS Ballistic":
         check_list.append(c_color)
+    if c_cod_color and profile_name != "ASICS Ballistic":
+        check_list.append(c_cod_color)
     if c_cod_nike:
         check_list.append(c_cod_nike)
 
@@ -1087,6 +1093,9 @@ if uploaded_file is not None:
     excluded_keys = set()
     if profile_name == "On Ballistic":
         excluded_keys = {'code'}  # 'code' non usato in On Ballistic
+    elif profile_name == "ASICS Ballistic":
+        # 'code', 'cod_color' e 'color' non sono colonne separate in ASICS - derivano dalla colonna 'Код'
+        excluded_keys = {'code', 'cod_color', 'color'}
     for k, val in col_map.items():
         if k in excluded_keys:
             continue
